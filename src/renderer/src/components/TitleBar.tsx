@@ -25,14 +25,31 @@ export function TitleBar({ section }: { section: string }): ReactElement {
 
       <div className="titlebar-drag" />
 
+      {/*
+        Window controls behave like native title-bar buttons: they are mouse-only.
+        Keeping them out of the tab order and preventing focus on mousedown stops
+        Chromium from drawing its orange focus ring when focus returns to the
+        window (e.g. after closing DevTools with F12).
+      */}
       <div className="window-controls">
-        <button className="win-btn" title="最小化" aria-label="最小化" onClick={() => void api.window.minimize()}>
+        <button
+          className="win-btn"
+          type="button"
+          tabIndex={-1}
+          onMouseDown={(event) => event.preventDefault()}
+          title="最小化"
+          aria-label="最小化"
+          onClick={() => void api.window.minimize()}
+        >
           <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
             <path d="M0 5h10" stroke="currentColor" strokeWidth="1" />
           </svg>
         </button>
         <button
           className="win-btn"
+          type="button"
+          tabIndex={-1}
+          onMouseDown={(event) => event.preventDefault()}
           title={maximized ? '还原' : '最大化'}
           aria-label={maximized ? '还原' : '最大化'}
           onClick={() => void api.window.toggleMaximize().then(setMaximized)}
@@ -48,7 +65,15 @@ export function TitleBar({ section }: { section: string }): ReactElement {
             </svg>
           )}
         </button>
-        <button className="win-btn close" title="关闭" aria-label="关闭" onClick={() => void api.window.close()}>
+        <button
+          className="win-btn close"
+          type="button"
+          tabIndex={-1}
+          onMouseDown={(event) => event.preventDefault()}
+          title="关闭"
+          aria-label="关闭"
+          onClick={() => void api.window.close()}
+        >
           <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
             <path d="M0 0l10 10M10 0L0 10" stroke="currentColor" strokeWidth="1" />
           </svg>
