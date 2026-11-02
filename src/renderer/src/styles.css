@@ -1067,20 +1067,22 @@ table.table {
   border-left-color: var(--amber);
 }
 
-/* Window-control buttons are mouse-only: never draw a focus ring on them. */
-.win-btn,
-.win-btn:focus,
-.win-btn:focus-visible {
+/* Buttons keep working with the keyboard (Enter/Space) but never paint a focus
+   ring: the browser default is the orange system accent, which looked like a
+   "pressed" state on the title bar and on the sidebar nav. */
+button,
+button:focus,
+button:focus-visible,
+button:active {
   outline: none;
 }
 
-/* Keyboard focus stays visible, but in the brand colour instead of the
-   system accent (which is orange on this machine). */
-button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+button::-moz-focus-inner {
+  border: 0;
 }
 
-button.win-btn:focus-visible {
+/* The shell is a focus sink, not a control. */
+.app:focus,
+.app:focus-visible {
   outline: none;
 }

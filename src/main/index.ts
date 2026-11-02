@@ -73,6 +73,18 @@ function createWindow(): BrowserWindow {
     }
   })
 
+  // When the detached DevTools window closes, Chromium parks focus on the first
+  // focusable control (the sidebar's first nav button). Move it back to the
+  // shell so no control looks "selected" and Space cannot activate a page.
+  window.webContents.on('devtools-closed', () => {
+    setTimeout(() => {
+      if (window.isDestroyed()) return
+      void window.webContents
+        .executeJavaScript("document.querySelector('.app')?.focus({ preventScroll: true })")
+        .catch(() => {})
+    }, 60)
+  })
+
   const devServerUrl = process.env['ELECTRON_RENDERER_URL']
   if (devServerUrl) {
     void window.loadURL(devServerUrl)

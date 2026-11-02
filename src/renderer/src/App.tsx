@@ -1,4 +1,4 @@
-import { useState, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { ToastProvider } from './components/Toast'
 import { TitleBar } from './components/TitleBar'
 import { UserSwitcher } from './components/UserSwitcher'
@@ -33,9 +33,16 @@ const PAGES: PageMeta[] = [
 function App(): ReactElement {
   const [page, setPage] = useState<PageId>('dashboard')
   const meta = PAGES.find((item) => item.id === page) ?? PAGES[0]
+  const shellRef = useRef<HTMLDivElement>(null)
+
+  // Keep the initial/returning focus on the shell instead of letting Chromium
+  // park it on the first focusable control (the "总览" nav button).
+  useEffect(() => {
+    shellRef.current?.focus({ preventScroll: true })
+  }, [])
 
   return (
-    <div className="app">
+    <div className="app" ref={shellRef} tabIndex={-1}>
       <TitleBar section={meta.label} />
 
       <div className="app-body">
