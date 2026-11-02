@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { IPC, type EnvThawApi, type UpdateProgress, type UpdateState } from '../shared/ipc-types'
 
 function subscribe<T>(channel: string, callback: (payload: T) => void): () => void {
@@ -19,6 +19,17 @@ const api: EnvThawApi = {
     openConfigDir: () => ipcRenderer.invoke(IPC.appOpenConfig),
     openDataDir: () => ipcRenderer.invoke(IPC.appOpenData),
     chooseDirectory: (defaultPath) => ipcRenderer.invoke(IPC.appChooseDirectory, defaultPath)
+  },
+  files: {
+    // Electron 32+ removed File.path; this is the supported replacement.
+    pathFor: (file) => webUtils.getPathForFile(file)
+  },
+  users: {
+    list: () => ipcRenderer.invoke(IPC.usersList),
+    current: () => ipcRenderer.invoke(IPC.usersCurrent),
+    create: (name) => ipcRenderer.invoke(IPC.usersCreate, name),
+    remove: (name) => ipcRenderer.invoke(IPC.usersRemove, name),
+    switch: (name) => ipcRenderer.invoke(IPC.usersSwitch, name)
   },
   window: {
     minimize: () => ipcRenderer.invoke(IPC.windowMinimize),
@@ -44,7 +55,9 @@ const api: EnvThawApi = {
     save: (entry) => ipcRenderer.invoke(IPC.scriptSave, entry),
     remove: (id) => ipcRenderer.invoke(IPC.scriptRemove, id),
     dryRun: (id) => ipcRenderer.invoke(IPC.scriptDryRun, id),
-    run: (id) => ipcRenderer.invoke(IPC.scriptRun, id)
+    run: (id) => ipcRenderer.invoke(IPC.scriptRun, id),
+    openFolder: () => ipcRenderer.invoke(IPC.scriptOpenFolder),
+    importFiles: (paths) => ipcRenderer.invoke(IPC.scriptImport, paths)
   },
   redirect: {
     get: () => ipcRenderer.invoke(IPC.redirectGet),

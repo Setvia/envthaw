@@ -1,8 +1,11 @@
-import { ipcMain } from 'electron'
+import { ipcMain, shell } from 'electron'
+import { z } from 'zod'
 import { IPC } from '../../shared/ipc-types'
 import { scriptIdSchema, scriptSaveSchema } from '../../shared/config-schema'
-import { deleteScript, dryRun, runScript, saveScript } from '../services/script-runner'
-import { readScriptTemplates, readScripts } from '../services/storage'
+import { deleteScript, dryRun, importScripts, runScript, saveScript } from '../services/script-runner'
+import { ensureLayout, readScriptTemplates, readScripts, scriptsDir } from '../services/storage'
+
+const importPathsSchema = z.array(z.string().min(1).max(1024)).min(1).max(50)
 
 export function registerScriptHandlers(): void {
   ipcMain.handle(IPC.scriptList, () => readScripts().sort((a, b) => b.createdAt - a.createdAt))
@@ -29,5 +32,14 @@ export function registerScriptHandlers(): void {
     const script = readScripts().find((item) => item.id === scriptIdSchema.parse(id))
     if (!script) throw new Error('脚本不存在')
     return runScript(script)
+  })
+
+  ipcMain.handle(IPC.scriptOpenFolder, async () => {
+    ensureLayout()
+    await shell.openPath(scriptsDir())
+  })
+
+  ipcMain.handle(IPC.scriptImport, (_event, paths: unknown) => {
+    return importScripts(importPathsSchema.parse(paths))
   })
 }

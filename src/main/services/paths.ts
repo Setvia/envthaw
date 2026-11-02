@@ -28,6 +28,18 @@ export function presetsDir(): string {
   return app.isPackaged ? path.join(process.resourcesPath, 'presets') : path.join(projectRoot(), 'presets')
 }
 
+/** Name of the profile used when nobody is "signed in". */
+export const DEFAULT_USER = 'default'
+
+/** All profiles live directly under config/. */
+export function userDir(user: string): string {
+  return path.join(configDir(), user)
+}
+
+export function sessionFile(): string {
+  return path.join(configDir(), 'session.json')
+}
+
 /** `${DATA_DIR}` / `${CONFIG_DIR}` / `${PROJECT_DIR}` placeholders used by presets. */
 export function expandTokens(value: string): string {
   return value

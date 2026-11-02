@@ -1,5 +1,12 @@
-import { useCallback, useEffect, useState, type ReactElement } from 'react'
-import type { DryRunReport, RunResult, ScriptEntry, ScriptTemplate, ScriptType } from '../../../shared/ipc-types'
+import { useCallback, useEffect, useRef, useState, type DragEvent, type ReactElement } from 'react'
+import type {
+  DryRunReport,
+  RunResult,
+  ScriptEntry,
+  ScriptImportWarning,
+  ScriptTemplate,
+  ScriptType
+} from '../../../shared/ipc-types'
 import { api, errorText, formatTime } from '../lib/api'
 import { useToast } from '../components/Toast'
 import { Modal } from '../components/Modal'
@@ -10,6 +17,12 @@ interface Draft {
   type: ScriptType
   content: string
   createdAt?: number
+}
+
+function typeLabel(type: ScriptType): string {
+  if (type === 'batch') return '批处理'
+  if (type === 'powershell') return 'PowerShell'
+  return '其他文件'
 }
 
 function draftFromTemplate(template: ScriptTemplate): Draft {
@@ -35,6 +48,9 @@ export function ScriptsPage(): ReactElement {
   const [run, setRun] = useState<RunResult | null>(null)
   const [dirty, setDirty] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [dragging, setDragging] = useState(false)
+  const [importWarnings, setImportWarnings] = useState<ScriptImportWarning[]>([])
+  const dragDepth = useRef(0)
 
   const load = useCallback(async () => {
     setBusy(true)
@@ -148,15 +164,121 @@ export function ScriptsPage(): ReactElement {
     }
   }
 
+  async function openFolder(): Promise<void> {
+    try {
+      await api.scripts.openFolder()
+    } catch (error) {
+      toast('error', errorText(error))
+    }
+  }
+
+  async function importDropped(paths: string[]): Promise<void> {
+    if (paths.length === 0) {
+      toast('error', '没有拿到文件路径，无法导入')
+      return
+    }
+    setBusy(true)
+    try {
+      const result = await api.scripts.importFiles(paths)
+      setImportWarnings(result.warnings)
+      await load()
+      if (result.added.length > 0) {
+        const last = result.added[result.added.length - 1]
+        setDraft({ ...last })
+        setReport(null)
+        setRun(null)
+        setDirty(false)
+        toast('success', `已添加 ${result.added.length} 个文件（已拷贝到脚本库）`)
+      }
+      for (const warning of result.warnings) {
+        toast('warn', `${warning.file}：${warning.reason}`)
+      }
+      if (result.added.length === 0 && result.warnings.length === 0) {
+        toast('error', '没有可添加的文件')
+      }
+    } catch (error) {
+      toast('error', errorText(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function handleDragEnter(event: DragEvent<HTMLDivElement>): void {
+    event.preventDefault()
+    dragDepth.current += 1
+    if (event.dataTransfer.types.includes('Files')) setDragging(true)
+  }
+
+  function handleDragOver(event: DragEvent<HTMLDivElement>): void {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLDivElement>): void {
+    event.preventDefault()
+    dragDepth.current = Math.max(0, dragDepth.current - 1)
+    if (dragDepth.current === 0) setDragging(false)
+  }
+
+  async function handleDrop(event: DragEvent<HTMLDivElement>): Promise<void> {
+    event.preventDefault()
+    dragDepth.current = 0
+    setDragging(false)
+    const files = Array.from(event.dataTransfer.files)
+    if (files.length === 0) return
+    // File objects cannot cross the bridge; resolve absolute paths in preload.
+    const paths = files.map((file) => api.files.pathFor(file)).filter((value): value is string => Boolean(value))
+    await importDropped(paths)
+  }
+
+  const runnable = draft ? draft.type !== 'other' : false
+
   return (
-    <div className="stack">
+    <div
+      className="stack drop-zone"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={(event) => void handleDrop(event)}
+    >
+      {dragging ? (
+        <div className="drop-overlay">
+          <div className="drop-card">
+            <div className="drop-icon">⇩</div>
+            <strong>拖拽到此处以添加脚本</strong>
+            <span>文件会被拷贝到当前用户的脚本库目录；非脚本文件也可以添加，但不能执行</span>
+          </div>
+        </div>
+      ) : null}
+
       <div className="toolbar">
         <span className="muted">脚本只在手动点击执行时运行；执行前强制 dry-run 预览写操作。</span>
         <div className="spacer" />
-        <button className="btn" onClick={() => setPickerOpen(true)} disabled={busy}>
+        <button className="btn" onClick={() => void openFolder()} disabled={busy}>
+          在资源管理器中查看
+        </button>
+        <button className="btn primary" onClick={() => setPickerOpen(true)} disabled={busy}>
           新建脚本
         </button>
       </div>
+
+      {importWarnings.length > 0 ? (
+        <div className="card" style={{ padding: '12px 14px' }}>
+          <div className="row" style={{ justifyContent: 'space-between' }}>
+            <strong style={{ fontSize: 13 }}>导入告警</strong>
+            <button className="btn small ghost" onClick={() => setImportWarnings([])}>
+              知道了
+            </button>
+          </div>
+          <ul className="muted" style={{ margin: '8px 0 0', paddingLeft: 18, lineHeight: 1.8 }}>
+            {importWarnings.map((warning, index) => (
+              <li key={`${warning.file}-${index}`}>
+                <span className="mono">{warning.file}</span>：{warning.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <div className="split" style={{ gridTemplateColumns: '270px minmax(0, 1fr)' }}>
         <div className="list">
@@ -175,7 +297,7 @@ export function ScriptsPage(): ReactElement {
               >
                 <span className="list-item-title">{entry.name}</span>
                 <span className="list-item-sub">
-                  {entry.type === 'batch' ? '批处理' : 'PowerShell'}
+                  {typeLabel(entry.type)}
                   {entry.lastExitCode !== undefined ? ` · exit ${entry.lastExitCode}` : ''}
                   {entry.lastRunAt ? ` · ${formatTime(entry.lastRunAt)}` : ''}
                 </span>
@@ -199,7 +321,8 @@ export function ScriptsPage(): ReactElement {
                   <select
                     className="select"
                     style={{ width: 160 }}
-                    value={draft.type}
+                    value={draft.type === 'other' ? 'other' : draft.type}
+                    disabled={draft.type === 'other'}
                     onChange={(event) => {
                       const type = event.target.value as ScriptType
                       patch({ type, content: draft.content.trim() ? draft.content : '' })
@@ -207,21 +330,27 @@ export function ScriptsPage(): ReactElement {
                   >
                     <option value="powershell">PowerShell</option>
                     <option value="batch">批处理 (.cmd)</option>
+                    {draft.type === 'other' ? <option value="other">其他文件</option> : null}
                   </select>
                   <div className="spacer" style={{ flex: 1 }} />
                   <button className="btn" onClick={() => void save()} disabled={busy}>
                     保存
                   </button>
-                  <button className="btn" onClick={() => void dryRun()} disabled={busy}>
+                  <button className="btn" onClick={() => void dryRun()} disabled={busy || !runnable}>
                     Dry-run
                   </button>
-                  <button className="btn primary" onClick={() => void execute()} disabled={busy}>
+                  <button className="btn primary" onClick={() => void execute()} disabled={busy || !runnable}>
                     执行
                   </button>
                   <button className="btn danger" onClick={() => void remove()} disabled={busy}>
                     删除
                   </button>
                 </div>
+                {draft.type === 'other' ? (
+                  <div className="badge amber" style={{ height: 'auto', padding: '8px 10px', whiteSpace: 'normal' }}>
+                    这个文件不是可执行的脚本后缀（.bat / .cmd / .ps1），已经拷贝进脚本库但无法运行。
+                  </div>
+                ) : null}
                 <textarea
                   className="textarea"
                   rows={14}

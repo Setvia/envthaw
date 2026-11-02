@@ -37,6 +37,8 @@ export function registerAppHandlers(): void {
       platform: process.platform,
       osRelease: os.release(),
       configDir: configDir(),
+      userDir: layout.userRoot,
+      user: layout.user,
       dataDir: dataDir(),
       presetsDir: presetsDir(),
       dataFiles: layout.files,

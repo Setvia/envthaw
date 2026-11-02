@@ -123,7 +123,11 @@ for (const entry of [...snapshots.filter((item) => item.name === 'smoke-test'), 
   await evaluate(socket, `window.envthaw.env.deleteSnapshot(${JSON.stringify(entry.id)})`)
 }
 const snapshotsLeft = await json(socket, `window.envthaw.env.snapshots()`)
-check('snapshot cleanup', snapshotsLeft.length === 0, `left=${snapshotsLeft.length}`)
+check(
+  'snapshot cleanup',
+  !snapshotsLeft.some((entry) => entry.name === 'smoke-test' || entry.name.startsWith('运行前：')),
+  `left=${snapshotsLeft.length}`
+)
 
 const audit = await json(socket, `window.envthaw.audit.list(50)`)
 check('audit log recorded operations', audit.length >= 5, `entries=${audit.length}`)

@@ -10,7 +10,7 @@ import {
   readScripts,
   readSettings,
   readSnapshots,
-  writeScripts,
+  upsertScriptEntries,
   writeSettings,
   writeSnapshots
 } from '../services/storage'
@@ -44,9 +44,8 @@ function importBundle(raw: unknown): ImportResult {
   }
 
   const snapshots = bundle.snapshots ? mergeById(readSnapshots(), bundle.snapshots) : readSnapshots()
-  const scripts = bundle.scripts ? mergeById(readScripts(), bundle.scripts) : readScripts()
   writeSnapshots(snapshots)
-  writeScripts(scripts)
+  if (bundle.scripts) upsertScriptEntries(bundle.scripts)
 
   audit('transfer.import', `快照 ${bundle.snapshots?.length ?? 0} 个，脚本 ${bundle.scripts?.length ?? 0} 个`)
   return { snapshots: bundle.snapshots?.length ?? 0, scripts: bundle.scripts?.length ?? 0 }

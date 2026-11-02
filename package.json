@@ -14,6 +14,7 @@
     "smoke": "node scripts/smoke.mjs 9223",
     "smoke:functional": "node scripts/smoke-functional.mjs 9223",
     "smoke:update": "node scripts/smoke-update.mjs 9223",
+    "smoke:users": "node scripts/smoke-users.mjs 9223",
     "package": "electron-vite build && electron-builder --win portable"
   },
   "devDependencies": {

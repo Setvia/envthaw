@@ -1,13 +1,45 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import type { DryRunChange, DryRunReport, RunResult, ScriptEntry, ScriptType } from '../../shared/ipc-types'
+import type {
+  DryRunChange,
+  DryRunReport,
+  RunResult,
+  ScriptEntry,
+  ScriptImportResult,
+  ScriptImportWarning,
+  ScriptType
+} from '../../shared/ipc-types'
 import { mergeEnv, readMachinePath, readUserEnv, toEnvRecord } from '../utils/registry'
 import { audit } from './env-service'
-import { readScripts, writeScripts, ensureLayout, newId, readSettings } from './storage'
+import {
+  deleteScriptFile,
+  ensureLayout,
+  extensionForType,
+  newId,
+  readScriptFile,
+  readScriptRecords,
+  readScripts,
+  readSettings,
+  scriptsDir,
+  writeScriptFile,
+  writeScriptRecords
+} from './storage'
 import { saveSnapshot } from './env-service'
 
 const RUN_TIMEOUT_MS = 180_000
+const MAX_IMPORT_BYTES = 5 * 1024 * 1024
+
+/** Extensions that can actually be executed by the runner. */
+const SCRIPT_EXTENSIONS: Record<string, ScriptType> = {
+  '.bat': 'batch',
+  '.cmd': 'batch',
+  '.ps1': 'powershell'
+}
+
+function typeForFileName(fileName: string): ScriptType {
+  return SCRIPT_EXTENSIONS[path.extname(fileName).toLowerCase()] ?? 'other'
+}
 
 interface Line {
   number: number
@@ -40,6 +72,13 @@ function stripComment(raw: string, type: ScriptType): string {
 
 /** Static analysis of the write operations a script would perform. Never executes anything. */
 export function dryRun(content: string, type: ScriptType): DryRunReport {
+  if (type === 'other') {
+    return {
+      changes: [],
+      warnings: ['这不是可执行的脚本文件（仅支持 .bat / .cmd / .ps1），无法分析写操作，也不能执行。']
+    }
+  }
+
   const changes: DryRunChange[] = []
   const warnings: string[] = []
   const lines = toLines(content)
@@ -220,6 +259,10 @@ function spawnAndCollect(command: string, args: string[], env: NodeJS.ProcessEnv
 }
 
 export async function runScript(script: ScriptEntry): Promise<RunResult> {
+  if (script.type === 'other') {
+    throw new Error('该文件不是可执行的脚本类型（仅支持 .bat / .cmd / .ps1），不能运行')
+  }
+
   const settings = readSettings()
   if (settings.autoSnapshotBeforeRun) {
     try {
@@ -249,12 +292,12 @@ export async function runScript(script: ScriptEntry): Promise<RunResult> {
           env
         )
 
-  const scripts = readScripts()
-  const target = scripts.find((item) => item.id === script.id)
+  const records = readScriptRecords()
+  const target = records.find((item) => item.id === script.id)
   if (target) {
     target.lastRunAt = Date.now()
     target.lastExitCode = result.exitCode
-    writeScripts(scripts)
+    writeScriptRecords(records)
   }
 
   audit('script.run', `${script.name}（exit=${result.exitCode}${result.timedOut ? '，超时' : ''}）`, result.exitCode === 0)
@@ -262,33 +305,115 @@ export async function runScript(script: ScriptEntry): Promise<RunResult> {
 }
 
 export function saveScript(input: { id: string; name: string; type: ScriptType; content: string; createdAt?: number }): ScriptEntry {
-  const scripts = readScripts()
-  const existing = scripts.find((item) => item.id === input.id)
+  ensureLayout()
+  const records = readScriptRecords()
+  const existing = records.find((item) => item.id === input.id)
+
   if (existing) {
+    // Keep the file in sync with the editor; rename it when the type changed.
+    const desiredExtension = extensionForType(input.type)
+    if (path.extname(existing.file).toLowerCase() !== desiredExtension) {
+      deleteScriptFile(existing.file)
+      existing.file = `${existing.id}${desiredExtension}`
+    }
     existing.name = input.name
     existing.type = input.type
-    existing.content = input.content
-    writeScripts(scripts)
+    writeScriptFile(existing.file, input.content)
+    writeScriptRecords(records)
     audit('script.save', `更新脚本「${input.name}」`)
-    return existing
+    return { ...existing, content: input.content }
   }
 
-  const entry: ScriptEntry = {
-    id: input.id || newId('script'),
+  const id = input.id || newId('script')
+  const file = `${id}${extensionForType(input.type)}`
+  const record = {
+    id,
     name: input.name,
     type: input.type,
-    content: input.content,
+    file,
     createdAt: input.createdAt ?? Date.now()
   }
-  scripts.push(entry)
-  writeScripts(scripts)
-  audit('script.save', `新建脚本「${entry.name}」`)
-  return entry
+  writeScriptFile(file, input.content)
+  records.push(record)
+  writeScriptRecords(records)
+  audit('script.save', `新建脚本「${record.name}」`)
+  return { ...record, content: input.content }
 }
 
 export function deleteScript(id: string): void {
-  const scripts = readScripts()
-  const target = scripts.find((item) => item.id === id)
-  writeScripts(scripts.filter((item) => item.id !== id))
-  if (target) audit('script.delete', target.name)
+  const records = readScriptRecords()
+  const target = records.find((item) => item.id === id)
+  if (!target) return
+  deleteScriptFile(target.file)
+  writeScriptRecords(records.filter((item) => item.id !== id))
+  audit('script.delete', target.name)
+}
+
+function uniqueFileName(desired: string): string {
+  const dir = scriptsDir()
+  const parsed = path.parse(desired)
+  let candidate = desired
+  let counter = 2
+  while (fs.existsSync(path.join(dir, candidate))) {
+    candidate = `${parsed.name}-${counter}${parsed.ext}`
+    counter += 1
+  }
+  return candidate
+}
+
+/**
+ * Copies dropped files into the user's script folder. The original path is never
+ * referenced afterwards, so moving/deleting the source does not break the entry.
+ * Non-script files are accepted but flagged and cannot be executed.
+ */
+export function importScripts(paths: string[]): ScriptImportResult {
+  ensureLayout()
+  const records = readScriptRecords()
+  const added: ScriptEntry[] = []
+  const warnings: ScriptImportWarning[] = []
+
+  for (const source of paths) {
+    try {
+      const stat = fs.statSync(source)
+      if (!stat.isFile()) {
+        warnings.push({ file: source, reason: '不是文件，已跳过' })
+        continue
+      }
+      if (stat.size > MAX_IMPORT_BYTES) {
+        warnings.push({ file: path.basename(source), reason: '文件超过 5MB，已跳过' })
+        continue
+      }
+
+      const type = typeForFileName(source)
+      const targetName = uniqueFileName(path.basename(source))
+      fs.copyFileSync(source, path.join(scriptsDir(), targetName))
+
+      const record = {
+        id: newId('script'),
+        name: path.basename(source, path.extname(source)),
+        type,
+        file: targetName,
+        createdAt: Date.now()
+      }
+      records.push(record)
+      added.push({ ...record, content: fs.readFileSync(path.join(scriptsDir(), targetName), 'utf8') })
+
+      if (type === 'other') {
+        warnings.push({
+          file: path.basename(source),
+          reason: '不是可执行的脚本后缀（.bat / .cmd / .ps1），已作为普通文件保存，不能运行'
+        })
+      }
+    } catch (error) {
+      warnings.push({ file: path.basename(source), reason: (error as Error).message })
+    }
+  }
+
+  if (added.length > 0) writeScriptRecords(records)
+  audit(
+    'script.import',
+    `导入 ${added.length} 个文件${warnings.length > 0 ? `，${warnings.length} 条告警` : ''}`,
+    added.length > 0
+  )
+  return { added, warnings }
 }

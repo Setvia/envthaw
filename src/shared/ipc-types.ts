@@ -44,16 +44,28 @@ export interface ApplyResult {
   rollbackId: string | null
 }
 
-export type ScriptType = 'batch' | 'powershell'
+export type ScriptType = 'batch' | 'powershell' | 'other'
 
 export interface ScriptEntry {
   id: string
   name: string
   type: ScriptType
+  /** File name inside <config>/<user>/scripts/ - scripts are always copies. */
+  file: string
   content: string
   createdAt: number
   lastRunAt?: number
   lastExitCode?: number
+}
+
+export interface ScriptImportWarning {
+  file: string
+  reason: string
+}
+
+export interface ScriptImportResult {
+  added: ScriptEntry[]
+  warnings: ScriptImportWarning[]
 }
 
 /** Loaded from presets/script-templates.json - never hardcoded in the renderer. */
@@ -128,9 +140,16 @@ export interface DataFiles {
   settings: string
   snapshots: string
   scripts: string
+  scriptsDir: string
   audit: string
   rollbacks: string
   updates: string
+}
+
+export interface UserProfile {
+  name: string
+  active: boolean
+  dir: string
 }
 
 export interface AppInfo {
@@ -142,6 +161,10 @@ export interface AppInfo {
   osRelease: string
   /** Fixed: always <project>/config, never outside the project directory. */
   configDir: string
+  /** Active user's directory: <config>/<user>. */
+  userDir: string
+  /** Currently active profile name; "default" is the temporary/not-signed-in one. */
+  user: string
   /** Working data referenced by redirects (venvs, caches), always in-project. */
   dataDir: string
   /** Directory the bundled example configs are seeded from. */
@@ -203,6 +226,17 @@ export interface EnvThawApi {
     openDataDir(): Promise<void>
     chooseDirectory(defaultPath?: string): Promise<string | null>
   }
+  files: {
+    /** Absolute path of a dropped/picked File (webUtils.getPathForFile). */
+    pathFor(file: File): string
+  }
+  users: {
+    list(): Promise<UserProfile[]>
+    current(): Promise<string>
+    create(name: string): Promise<UserProfile[]>
+    remove(name: string): Promise<UserProfile[]>
+    switch(name: string): Promise<UserProfile[]>
+  }
   window: {
     minimize(): Promise<void>
     toggleMaximize(): Promise<boolean>
@@ -224,10 +258,19 @@ export interface EnvThawApi {
   scripts: {
     list(): Promise<ScriptEntry[]>
     templates(): Promise<ScriptTemplate[]>
-    save(entry: Omit<ScriptEntry, 'createdAt' | 'lastRunAt' | 'lastExitCode'> & { createdAt?: number }): Promise<ScriptEntry>
+    save(entry: {
+      id: string
+      name: string
+      type: ScriptType
+      content: string
+      createdAt?: number
+    }): Promise<ScriptEntry>
     remove(id: string): Promise<void>
     dryRun(id: string): Promise<DryRunReport>
     run(id: string): Promise<RunResult>
+    openFolder(): Promise<void>
+    /** Copies dropped/picked files into <user>/scripts/ (never references the original). */
+    importFiles(paths: string[]): Promise<ScriptImportResult>
   }
   redirect: {
     get(): Promise<RedirectConfig>
@@ -264,6 +307,11 @@ export const IPC = {
   appOpenConfig: 'app:open-config',
   appOpenData: 'app:open-data',
   appChooseDirectory: 'app:choose-directory',
+  usersList: 'users:list',
+  usersCurrent: 'users:current',
+  usersCreate: 'users:create',
+  usersRemove: 'users:remove',
+  usersSwitch: 'users:switch',
   windowMinimize: 'window:minimize',
   windowToggleMaximize: 'window:toggle-maximize',
   windowClose: 'window:close',
@@ -284,6 +332,8 @@ export const IPC = {
   scriptRemove: 'script:remove',
   scriptDryRun: 'script:dry-run',
   scriptRun: 'script:run',
+  scriptOpenFolder: 'script:open-folder',
+  scriptImport: 'script:import',
   redirectGet: 'redirect:get',
   redirectItems: 'redirect:items',
   redirectPreview: 'redirect:preview',

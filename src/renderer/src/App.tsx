@@ -1,6 +1,7 @@
 import { useState, type ReactElement } from 'react'
 import { ToastProvider } from './components/Toast'
 import { TitleBar } from './components/TitleBar'
+import { UserSwitcher } from './components/UserSwitcher'
 import { Dashboard } from './pages/Dashboard'
 import { EnvironmentPage } from './pages/EnvironmentPage'
 import { RedirectPage } from './pages/RedirectPage'
@@ -51,9 +52,8 @@ function App(): ReactElement {
           ))}
 
           <div className="sidebar-footer">
-            v0.1 · 本地 MVP
-            <br />
-            配置固定写在项目内
+            <UserSwitcher />
+            <div className="sidebar-version">v0.1 · 本地 MVP</div>
           </div>
         </aside>
 

@@ -31,7 +31,8 @@ export const envSnapshotSchema = z.object({
 export const scriptEntrySchema = z.object({
   id: z.string().min(1).max(64),
   name: z.string().min(1).max(120),
-  type: z.enum(['batch', 'powershell']),
+  type: z.enum(['batch', 'powershell', 'other']),
+  file: z.string().min(1).max(255),
   content: z.string().max(200_000),
   createdAt: z.number(),
   lastRunAt: z.number().optional(),
@@ -41,7 +42,7 @@ export const scriptEntrySchema = z.object({
 export const scriptSaveSchema = z.object({
   id: z.string().min(1).max(64),
   name: z.string().min(1).max(120),
-  type: z.enum(['batch', 'powershell']),
+  type: z.enum(['batch', 'powershell', 'other']),
   content: z.string().min(1, '脚本内容不能为空').max(200_000),
   createdAt: z.number().optional()
 })

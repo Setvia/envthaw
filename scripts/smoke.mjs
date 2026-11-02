@@ -69,11 +69,23 @@ const windowApi = await evaluate(
 )
 record('window controls bridge', windowApi === true, String(windowApi))
 
+const fileApi = await evaluate(
+  socket,
+  "typeof window.envthaw.files.pathFor === 'function' && typeof window.envthaw.scripts.openFolder === 'function' && typeof window.envthaw.scripts.importFiles === 'function'"
+)
+record('drag&drop + folder bridge', fileApi === true, String(fileApi))
+
 const info = JSON.parse(await evaluate(socket, 'window.envthaw.app.info().then((info) => JSON.stringify(info))'))
 record('app.info config dir in project', info.configDir.includes('config'), info.configDir)
+record('app.info user dir in config', info.userDir.includes('default') || info.userDir.includes(info.user), info.userDir)
+record('app.info active user', typeof info.user === 'string' && info.user.length > 0, `user=${info.user}`)
 record('app.info data dir in project', info.dataDir.includes('data'), info.dataDir)
 record('app.info versions', Boolean(info.electron), `electron=${info.electron} node=${info.node}`)
 record('frameless (packaged flag readable)', typeof info.packaged === 'boolean', `packaged=${info.packaged}`)
+
+const users = JSON.parse(await evaluate(socket, 'window.envthaw.users.list().then((u) => JSON.stringify(u))'))
+record('users.list contains default', users.some((user) => user.name === 'default'), `users=${users.map((user) => user.name).join(',')}`)
+record('one user is active', users.filter((user) => user.active).length === 1, `active=${users.find((user) => user.active)?.name}`)
 
 const vars = JSON.parse(await evaluate(socket, 'window.envthaw.env.list().then((vars) => JSON.stringify(vars))'))
 record('env.list via HKCU', Array.isArray(vars), `count=${vars.length} sample=${vars.slice(0, 3).map((v) => v.name).join(',')}`)
@@ -86,6 +98,7 @@ record('script templates loaded from presets', templates.length > 0, `count=${te
 
 const scripts = JSON.parse(await evaluate(socket, 'window.envthaw.scripts.list().then((s) => JSON.stringify(s))'))
 record('scripts seeded from presets', scripts.length > 0, `count=${scripts.length}`)
+record('scripts are file-backed', scripts.every((script) => typeof script.file === 'string' && script.file.length > 0), scripts[0]?.file ?? '')
 
 const redirect = JSON.parse(await evaluate(socket, 'window.envthaw.redirect.get().then((c) => JSON.stringify(c))'))
 record('redirect defaults live in config dir', redirect.pythonVenvHome.includes('data'), redirect.pythonVenvHome)
