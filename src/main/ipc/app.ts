@@ -3,7 +3,8 @@ import os from 'node:os'
 import { IPC, type AppInfo } from '../../shared/ipc-types'
 import { appSettingsSchema } from '../../shared/config-schema'
 import { runPowerShell } from '../utils/powershell'
-import { ensureLayout, getLayout, readSettings, setStorageRoot, writeSettings } from '../services/storage'
+import { ensureLayout, getLayout, readSettings, writeSettings } from '../services/storage'
+import { configDir, dataDir, presetsDir } from '../services/paths'
 import { audit } from '../services/env-service'
 
 let elevated: boolean | null = null
@@ -35,21 +36,27 @@ export function registerAppHandlers(): void {
       chrome: process.versions.chrome,
       platform: process.platform,
       osRelease: os.release(),
-      storageRoot: layout.root,
+      configDir: configDir(),
+      dataDir: dataDir(),
+      presetsDir: presetsDir(),
       dataFiles: layout.files,
-      isElevated: await isElevated()
+      isElevated: await isElevated(),
+      packaged: app.isPackaged
     }
   })
 
-  ipcMain.handle(IPC.appOpenStorage, async () => {
-    const layout = ensureLayout()
-    await shell.openPath(layout.root)
+  ipcMain.handle(IPC.appOpenConfig, async () => {
+    await shell.openPath(ensureLayout().root)
+  })
+
+  ipcMain.handle(IPC.appOpenData, async () => {
+    await shell.openPath(ensureLayout().dataDir)
   })
 
   ipcMain.handle(IPC.appChooseDirectory, async (_event, defaultPath: unknown) => {
     const result = await dialog.showOpenDialog({
-      title: '选择存储目录',
-      defaultPath: typeof defaultPath === 'string' && defaultPath ? defaultPath : getLayout().root,
+      title: '选择目录',
+      defaultPath: typeof defaultPath === 'string' && defaultPath ? defaultPath : dataDir(),
       properties: ['openDirectory', 'createDirectory']
     })
     if (result.canceled || result.filePaths.length === 0) return null
@@ -62,14 +69,11 @@ export function registerSettingsHandlers(): void {
 
   ipcMain.handle(IPC.settingsSave, (_event, input: unknown) => {
     const parsed = appSettingsSchema.parse(input)
-    const current = readSettings()
-
-    if (parsed.storageRoot && parsed.storageRoot !== current.storageRoot) {
-      setStorageRoot(parsed.storageRoot)
-      ensureLayout()
-      audit('settings.storage', `存储目录切换到 ${parsed.storageRoot}`)
-    }
-
-    return writeSettings(parsed)
+    const saved = writeSettings(parsed)
+    audit('settings.save', `更新源 ${saved.updateFeedUrl || '（未配置）'}`)
+    return saved
   })
 }
+
+/** Exposed for the renderer's "打开配置目录" button on the settings page. */
+export const configDirectory = (): string => getLayout().root

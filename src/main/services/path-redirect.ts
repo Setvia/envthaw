@@ -57,13 +57,13 @@ function redirectFile(): string {
 }
 
 export function defaultRedirectConfig(): RedirectConfig {
-  const root = ensureLayout().root
+  const layout = ensureLayout()
   return {
-    pythonVenvHome: path.join(root, 'venvs'),
-    pipCacheDir: path.join(root, 'cache', 'pip'),
-    nodePrefix: path.join(root, 'node', 'global'),
-    nodeCache: path.join(root, 'cache', 'npm'),
-    gitConfigPath: path.join(root, 'git', '.gitconfig'),
+    pythonVenvHome: path.join(layout.dataDir, 'venvs'),
+    pipCacheDir: path.join(layout.dataDir, 'cache', 'pip'),
+    nodePrefix: path.join(layout.dataDir, 'node', 'global'),
+    nodeCache: path.join(layout.dataDir, 'cache', 'npm'),
+    gitConfigPath: path.join(layout.dataDir, 'git', '.gitconfig'),
     gitUserName: '',
     gitUserEmail: ''
   }

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react'
-import type { DryRunReport, RunResult, ScriptEntry, ScriptType } from '../../../shared/ipc-types'
+import type { DryRunReport, RunResult, ScriptEntry, ScriptTemplate, ScriptType } from '../../../shared/ipc-types'
 import { api, errorText, formatTime } from '../lib/api'
 import { useToast } from '../components/Toast'
+import { Modal } from '../components/Modal'
 
 interface Draft {
   id: string
@@ -11,34 +12,36 @@ interface Draft {
   createdAt?: number
 }
 
-const TEMPLATE: Record<ScriptType, string> = {
-  batch: `@echo off\r\nREM 示例：把 JDK 指向非保护盘\r\nsetx JAVA_HOME "D:\\EnvThaw\\jdk\\17"\r\nmkdir "D:\\EnvThaw\\maven-repo"\r\n`,
-  powershell: `# 示例：把 pip 缓存指向非保护盘（当前用户永久生效）\r\n[Environment]::SetEnvironmentVariable('PIP_CACHE_DIR', 'D:\\EnvThaw\\cache\\pip', 'User')\r\nNew-Item -ItemType Directory -Path 'D:\\EnvThaw\\cache\\pip' -Force | Out-Null\r\n`
-}
-
-function newDraft(): Draft {
+function draftFromTemplate(template: ScriptTemplate): Draft {
   return {
     id: `script-${Date.now().toString(36)}`,
-    name: '新脚本',
-    type: 'powershell',
-    content: TEMPLATE.powershell
+    name: template.name,
+    type: template.type,
+    content: template.content
   }
+}
+
+function emptyDraft(): Draft {
+  return { id: `script-${Date.now().toString(36)}`, name: '新脚本', type: 'powershell', content: '# 在这里编写脚本\r\n' }
 }
 
 export function ScriptsPage(): ReactElement {
   const toast = useToast()
   const [scripts, setScripts] = useState<ScriptEntry[]>([])
+  const [templates, setTemplates] = useState<ScriptTemplate[]>([])
   const [draft, setDraft] = useState<Draft | null>(null)
   const [busy, setBusy] = useState(false)
   const [report, setReport] = useState<DryRunReport | null>(null)
   const [run, setRun] = useState<RunResult | null>(null)
   const [dirty, setDirty] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   const load = useCallback(async () => {
     setBusy(true)
     try {
-      const list = await api.scripts.list()
+      const [list, templateList] = await Promise.all([api.scripts.list(), api.scripts.templates()])
       setScripts(list)
+      setTemplates(templateList)
       setDraft((current) => current ?? (list[0] ? { ...list[0] } : null))
     } catch (error) {
       toast('error', errorText(error))
@@ -150,16 +153,7 @@ export function ScriptsPage(): ReactElement {
       <div className="toolbar">
         <span className="muted">脚本只在手动点击执行时运行；执行前强制 dry-run 预览写操作。</span>
         <div className="spacer" />
-        <button
-          className="btn"
-          onClick={() => {
-            setDraft(newDraft())
-            setReport(null)
-            setRun(null)
-            setDirty(true)
-          }}
-          disabled={busy}
-        >
+        <button className="btn" onClick={() => setPickerOpen(true)} disabled={busy}>
           新建脚本
         </button>
       </div>
@@ -208,7 +202,7 @@ export function ScriptsPage(): ReactElement {
                     value={draft.type}
                     onChange={(event) => {
                       const type = event.target.value as ScriptType
-                      patch({ type, content: draft.content.trim() ? draft.content : TEMPLATE[type] })
+                      patch({ type, content: draft.content.trim() ? draft.content : '' })
                     }}
                   >
                     <option value="powershell">PowerShell</option>
@@ -310,12 +304,66 @@ export function ScriptsPage(): ReactElement {
             <div className="card">
               <div className="empty">
                 <strong>选择或新建一个脚本</strong>
-                脚本保存在非保护盘，可作为课程环境的“一键准备”脚本。
+                示例脚本与模板都在项目配置里维护，不再写死在界面中。
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {pickerOpen ? (
+        <Modal
+          title="从模板新建脚本"
+          subtitle="模板来自 presets/script-templates.json，改模板不用改代码。"
+          width={720}
+          onClose={() => setPickerOpen(false)}
+          footer={
+            <>
+              <button className="btn" onClick={() => setPickerOpen(false)}>
+                取消
+              </button>
+              <button
+                className="btn primary"
+                onClick={() => {
+                  setDraft(emptyDraft())
+                  setReport(null)
+                  setRun(null)
+                  setDirty(true)
+                  setPickerOpen(false)
+                }}
+              >
+                空白脚本
+              </button>
+            </>
+          }
+        >
+          {templates.length === 0 ? (
+            <div className="empty">
+              <strong>没有可用模板</strong>
+              请检查 presets/script-templates.json 是否存在且格式正确。
+            </div>
+          ) : (
+            <div className="template-grid">
+              {templates.map((template) => (
+                <button
+                  key={template.id}
+                  className="template-card"
+                  onClick={() => {
+                    setDraft(draftFromTemplate(template))
+                    setReport(null)
+                    setRun(null)
+                    setDirty(true)
+                    setPickerOpen(false)
+                  }}
+                >
+                  <strong>{template.name}</strong>
+                  <span>{template.type === 'batch' ? '批处理' : 'PowerShell'} · {template.id}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </Modal>
+      ) : null}
     </div>
   )
 }

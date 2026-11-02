@@ -2,10 +2,13 @@ import { ipcMain } from 'electron'
 import { IPC } from '../../shared/ipc-types'
 import { scriptIdSchema, scriptSaveSchema } from '../../shared/config-schema'
 import { deleteScript, dryRun, runScript, saveScript } from '../services/script-runner'
-import { readScripts } from '../services/storage'
+import { readScriptTemplates, readScripts } from '../services/storage'
 
 export function registerScriptHandlers(): void {
   ipcMain.handle(IPC.scriptList, () => readScripts().sort((a, b) => b.createdAt - a.createdAt))
+
+  // Templates live in presets/script-templates.json, not in the renderer bundle.
+  ipcMain.handle(IPC.scriptTemplates, () => readScriptTemplates())
 
   ipcMain.handle(IPC.scriptSave, (_event, input: unknown) => {
     const parsed = scriptSaveSchema.parse(input)

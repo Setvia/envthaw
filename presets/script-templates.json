@@ -1,0 +1,26 @@
+[
+  {
+    "id": "powershell-user-env",
+    "name": "PowerShell · 写入用户环境变量",
+    "type": "powershell",
+    "content": "# 永久写入当前用户的环境变量\r\n[Environment]::SetEnvironmentVariable('JAVA_HOME', '${DATA_DIR}\\jdk\\17', 'User')\r\nWrite-Output '已写入 JAVA_HOME'\r\n"
+  },
+  {
+    "id": "powershell-cache",
+    "name": "PowerShell · 重定向缓存目录",
+    "type": "powershell",
+    "content": "# 把常见缓存目录收进项目的 data 目录\r\n[Environment]::SetEnvironmentVariable('PIP_CACHE_DIR', '${DATA_DIR}\\cache\\pip', 'User')\r\n[Environment]::SetEnvironmentVariable('NPM_CONFIG_CACHE', '${DATA_DIR}\\cache\\npm', 'User')\r\nNew-Item -ItemType Directory -Path '${DATA_DIR}\\cache\\pip' -Force | Out-Null\r\nWrite-Output '缓存目录已重定向'\r\n"
+  },
+  {
+    "id": "powershell-venv",
+    "name": "PowerShell · 创建课程虚拟环境",
+    "type": "powershell",
+    "content": "# 在项目的 data/venvs 下创建一门课的虚拟环境\r\n$venvRoot = '${DATA_DIR}\\venvs'\r\nNew-Item -ItemType Directory -Path $venvRoot -Force | Out-Null\r\npython -m venv (Join-Path $venvRoot 'py311-course')\r\nWrite-Output \"虚拟环境已创建：$venvRoot\\py311-course\"\r\n"
+  },
+  {
+    "id": "batch-setx",
+    "name": "批处理 · setx 设置变量",
+    "type": "batch",
+    "content": "@echo off\r\nREM setx 会永久写入当前用户的环境变量\r\nsetx MAVEN_HOME \"${DATA_DIR}\\maven\"\r\necho done\r\n"
+  }
+]

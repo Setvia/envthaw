@@ -56,40 +56,51 @@ const socket = await connect(target.webSocketDebuggerUrl)
 
 const checks = []
 function record(name, ok, detail) {
-  checks.push({ name, ok, detail })
+  checks.push({ name, ok })
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}  ${detail ?? ''}`)
 }
 
 const bridge = await evaluate(socket, "typeof window.envthaw === 'object' && typeof window.envthaw.env.list === 'function'")
 record('preload bridge exposed', bridge === true, String(bridge))
 
-const info = await evaluate(socket, 'window.envthaw.app.info().then((info) => JSON.stringify(info))')
-const infoParsed = JSON.parse(info)
-record('app.info', Boolean(infoParsed.storageRoot), `storageRoot=${infoParsed.storageRoot}`)
-record('app.info versions', Boolean(infoParsed.electron), `electron=${infoParsed.electron} node=${infoParsed.node}`)
+const windowApi = await evaluate(
+  socket,
+  "typeof window.envthaw.window.minimize === 'function' && typeof window.envthaw.window.onMaximizedChange === 'function'"
+)
+record('window controls bridge', windowApi === true, String(windowApi))
 
-const vars = await evaluate(socket, 'window.envthaw.env.list().then((vars) => JSON.stringify(vars))')
-const varList = JSON.parse(vars)
-record('env.list via HKCU', Array.isArray(varList), `count=${varList.length} sample=${varList.slice(0, 3).map((v) => v.name).join(',')}`)
+const info = JSON.parse(await evaluate(socket, 'window.envthaw.app.info().then((info) => JSON.stringify(info))'))
+record('app.info config dir in project', info.configDir.includes('config'), info.configDir)
+record('app.info data dir in project', info.dataDir.includes('data'), info.dataDir)
+record('app.info versions', Boolean(info.electron), `electron=${info.electron} node=${info.node}`)
+record('frameless (packaged flag readable)', typeof info.packaged === 'boolean', `packaged=${info.packaged}`)
 
-const snapshots = await evaluate(socket, 'window.envthaw.env.snapshots().then((s) => JSON.stringify(s))')
-record('env.snapshots', Array.isArray(JSON.parse(snapshots)), `count=${JSON.parse(snapshots).length}`)
+const vars = JSON.parse(await evaluate(socket, 'window.envthaw.env.list().then((vars) => JSON.stringify(vars))'))
+record('env.list via HKCU', Array.isArray(vars), `count=${vars.length} sample=${vars.slice(0, 3).map((v) => v.name).join(',')}`)
 
-const redirect = await evaluate(socket, 'window.envthaw.redirect.get().then((c) => JSON.stringify(c))')
-const redirectParsed = JSON.parse(redirect)
-record('redirect.get', Boolean(redirectParsed.pythonVenvHome), `venv=${redirectParsed.pythonVenvHome}`)
+const snapshots = JSON.parse(await evaluate(socket, 'window.envthaw.env.snapshots().then((s) => JSON.stringify(s))'))
+record('env.snapshots', Array.isArray(snapshots), `count=${snapshots.length}`)
 
-const items = await evaluate(socket, 'window.envthaw.redirect.items().then((i) => JSON.stringify(i))')
-record('redirect.items', JSON.parse(items).length === 5, `count=${JSON.parse(items).length}`)
+const templates = JSON.parse(await evaluate(socket, 'window.envthaw.scripts.templates().then((t) => JSON.stringify(t))'))
+record('script templates loaded from presets', templates.length > 0, `count=${templates.length} ids=${templates.map((t) => t.id).join(',')}`)
 
-const scripts = await evaluate(socket, 'window.envthaw.scripts.list().then((s) => JSON.stringify(s))')
-record('scripts.list', Array.isArray(JSON.parse(scripts)), `count=${JSON.parse(scripts).length}`)
+const scripts = JSON.parse(await evaluate(socket, 'window.envthaw.scripts.list().then((s) => JSON.stringify(s))'))
+record('scripts seeded from presets', scripts.length > 0, `count=${scripts.length}`)
 
-const audit = await evaluate(socket, 'window.envthaw.audit.list(10).then((a) => JSON.stringify(a))')
-record('audit.list', Array.isArray(JSON.parse(audit)), `count=${JSON.parse(audit).length}`)
+const redirect = JSON.parse(await evaluate(socket, 'window.envthaw.redirect.get().then((c) => JSON.stringify(c))'))
+record('redirect defaults live in config dir', redirect.pythonVenvHome.includes('data'), redirect.pythonVenvHome)
 
-const settings = await evaluate(socket, 'window.envthaw.settings.get().then((s) => JSON.stringify(s))')
-record('settings.get', Boolean(JSON.parse(settings).storageRoot), JSON.parse(settings).storageRoot)
+const items = JSON.parse(await evaluate(socket, 'window.envthaw.redirect.items().then((i) => JSON.stringify(i))'))
+record('redirect.items', items.length === 5, `count=${items.length}`)
+
+const settings = JSON.parse(await evaluate(socket, 'window.envthaw.settings.get().then((s) => JSON.stringify(s))'))
+record('settings.get', typeof settings.updateFeedUrl === 'string', `feed=${settings.updateFeedUrl || '(empty)'}`)
+
+const update = JSON.parse(await evaluate(socket, 'window.envthaw.update.getState().then((u) => JSON.stringify(u))'))
+record('update.getState', update.configured === false && update.currentVersion === info.appVersion, `status=${update.status}`)
+
+const audit = JSON.parse(await evaluate(socket, 'window.envthaw.audit.list(10).then((a) => JSON.stringify(a))'))
+record('audit.list', Array.isArray(audit), `count=${audit.length}`)
 
 socket.close()
 

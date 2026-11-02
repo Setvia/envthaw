@@ -1,5 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { IPC, type EnvThawApi, type RedirectConfig } from '../shared/ipc-types'
+import { IPC, type EnvThawApi, type UpdateProgress, type UpdateState } from '../shared/ipc-types'
+
+function subscribe<T>(channel: string, callback: (payload: T) => void): () => void {
+  const listener = (_event: Electron.IpcRendererEvent, payload: T): void => callback(payload)
+  ipcRenderer.on(channel, listener)
+  return () => {
+    ipcRenderer.removeListener(channel, listener)
+  }
+}
 
 /**
  * The only bridge between the sandboxed renderer and the main process.
@@ -8,8 +16,16 @@ import { IPC, type EnvThawApi, type RedirectConfig } from '../shared/ipc-types'
 const api: EnvThawApi = {
   app: {
     info: () => ipcRenderer.invoke(IPC.appInfo),
-    openStorage: () => ipcRenderer.invoke(IPC.appOpenStorage),
+    openConfigDir: () => ipcRenderer.invoke(IPC.appOpenConfig),
+    openDataDir: () => ipcRenderer.invoke(IPC.appOpenData),
     chooseDirectory: (defaultPath) => ipcRenderer.invoke(IPC.appChooseDirectory, defaultPath)
+  },
+  window: {
+    minimize: () => ipcRenderer.invoke(IPC.windowMinimize),
+    toggleMaximize: () => ipcRenderer.invoke(IPC.windowToggleMaximize),
+    close: () => ipcRenderer.invoke(IPC.windowClose),
+    isMaximized: () => ipcRenderer.invoke(IPC.windowIsMaximized),
+    onMaximizedChange: (callback) => subscribe<boolean>(IPC.windowMaximizedChanged, callback)
   },
   env: {
     list: () => ipcRenderer.invoke(IPC.envList),
@@ -24,6 +40,7 @@ const api: EnvThawApi = {
   },
   scripts: {
     list: () => ipcRenderer.invoke(IPC.scriptList),
+    templates: () => ipcRenderer.invoke(IPC.scriptTemplates),
     save: (entry) => ipcRenderer.invoke(IPC.scriptSave, entry),
     remove: (id) => ipcRenderer.invoke(IPC.scriptRemove, id),
     dryRun: (id) => ipcRenderer.invoke(IPC.scriptDryRun, id),
@@ -32,8 +49,8 @@ const api: EnvThawApi = {
   redirect: {
     get: () => ipcRenderer.invoke(IPC.redirectGet),
     items: () => ipcRenderer.invoke(IPC.redirectItems),
-    preview: (config: RedirectConfig) => ipcRenderer.invoke(IPC.redirectPreview, config),
-    apply: (config: RedirectConfig) => ipcRenderer.invoke(IPC.redirectApply, config)
+    preview: (config) => ipcRenderer.invoke(IPC.redirectPreview, config),
+    apply: (config) => ipcRenderer.invoke(IPC.redirectApply, config)
   },
   settings: {
     get: () => ipcRenderer.invoke(IPC.settingsGet),
@@ -47,6 +64,14 @@ const api: EnvThawApi = {
     importBundle: (bundle) => ipcRenderer.invoke(IPC.transferImport, bundle),
     saveBundleToDisk: () => ipcRenderer.invoke(IPC.transferSave),
     loadBundleFromDisk: () => ipcRenderer.invoke(IPC.transferLoad)
+  },
+  update: {
+    getState: () => ipcRenderer.invoke(IPC.updateGet),
+    check: () => ipcRenderer.invoke(IPC.updateCheck),
+    download: () => ipcRenderer.invoke(IPC.updateDownload),
+    openDownloadFolder: () => ipcRenderer.invoke(IPC.updateOpenFolder),
+    onProgress: (callback) => subscribe<UpdateProgress>(IPC.updateProgress, callback),
+    onState: (callback) => subscribe<UpdateState>(IPC.updateState, callback)
   }
 }
 

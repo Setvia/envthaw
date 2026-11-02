@@ -56,6 +56,14 @@ export interface ScriptEntry {
   lastExitCode?: number
 }
 
+/** Loaded from presets/script-templates.json - never hardcoded in the renderer. */
+export interface ScriptTemplate {
+  id: string
+  name: string
+  type: ScriptType
+  content: string
+}
+
 export type DryRunKind = 'set' | 'delete' | 'mkdir' | 'registry' | 'other'
 
 export interface DryRunChange {
@@ -102,9 +110,10 @@ export interface RedirectItem {
 }
 
 export interface AppSettings {
-  storageRoot: string
   autoSnapshotBeforeRun: boolean
   autoSnapshotBeforeRestore: boolean
+  /** https URL of the release manifest. Empty until the project site exists. */
+  updateFeedUrl: string
 }
 
 export interface AuditEntry {
@@ -121,6 +130,7 @@ export interface DataFiles {
   scripts: string
   audit: string
   rollbacks: string
+  updates: string
 }
 
 export interface AppInfo {
@@ -130,9 +140,15 @@ export interface AppInfo {
   chrome: string
   platform: string
   osRelease: string
-  storageRoot: string
+  /** Fixed: always <project>/config, never outside the project directory. */
+  configDir: string
+  /** Working data referenced by redirects (venvs, caches), always in-project. */
+  dataDir: string
+  /** Directory the bundled example configs are seeded from. */
+  presetsDir: string
   dataFiles: DataFiles
   isElevated: boolean
+  packaged: boolean
 }
 
 export interface ExportBundle {
@@ -150,11 +166,49 @@ export interface ImportResult {
   scripts: number
 }
 
+/* ------------------------------------------------------------------ update */
+
+export interface UpdateRelease {
+  version: string
+  notes?: string
+  url: string
+  sha256?: string
+  size?: number
+  publishedAt?: number
+}
+
+export type UpdateStatus = 'idle' | 'checking' | 'up-to-date' | 'available' | 'downloading' | 'downloaded' | 'error'
+
+export interface UpdateProgress {
+  received: number
+  total: number
+}
+
+export interface UpdateState {
+  configured: boolean
+  feedUrl: string
+  currentVersion: string
+  status: UpdateStatus
+  release?: UpdateRelease
+  progress?: UpdateProgress
+  filePath?: string
+  error?: string
+  checkedAt?: number
+}
+
 export interface EnvThawApi {
   app: {
     info(): Promise<AppInfo>
-    openStorage(): Promise<void>
+    openConfigDir(): Promise<void>
+    openDataDir(): Promise<void>
     chooseDirectory(defaultPath?: string): Promise<string | null>
+  }
+  window: {
+    minimize(): Promise<void>
+    toggleMaximize(): Promise<boolean>
+    close(): Promise<void>
+    isMaximized(): Promise<boolean>
+    onMaximizedChange(callback: (maximized: boolean) => void): () => void
   }
   env: {
     list(): Promise<EnvVarEntry[]>
@@ -169,6 +223,7 @@ export interface EnvThawApi {
   }
   scripts: {
     list(): Promise<ScriptEntry[]>
+    templates(): Promise<ScriptTemplate[]>
     save(entry: Omit<ScriptEntry, 'createdAt' | 'lastRunAt' | 'lastExitCode'> & { createdAt?: number }): Promise<ScriptEntry>
     remove(id: string): Promise<void>
     dryRun(id: string): Promise<DryRunReport>
@@ -193,13 +248,27 @@ export interface EnvThawApi {
     saveBundleToDisk(): Promise<string | null>
     loadBundleFromDisk(): Promise<ExportBundle | null>
   }
+  update: {
+    getState(): Promise<UpdateState>
+    check(): Promise<UpdateState>
+    download(): Promise<UpdateState>
+    openDownloadFolder(): Promise<void>
+    onProgress(callback: (progress: UpdateProgress) => void): () => void
+    onState(callback: (state: UpdateState) => void): () => void
+  }
 }
 
 /** Channel names, grouped so a typo cannot silently create a dead channel. */
 export const IPC = {
   appInfo: 'app:info',
-  appOpenStorage: 'app:open-storage',
+  appOpenConfig: 'app:open-config',
+  appOpenData: 'app:open-data',
   appChooseDirectory: 'app:choose-directory',
+  windowMinimize: 'window:minimize',
+  windowToggleMaximize: 'window:toggle-maximize',
+  windowClose: 'window:close',
+  windowIsMaximized: 'window:is-maximized',
+  windowMaximizedChanged: 'window:maximized-changed',
   envList: 'env:list',
   envSet: 'env:set',
   envRemove: 'env:remove',
@@ -210,6 +279,7 @@ export const IPC = {
   envApply: 'env:apply',
   envRollback: 'env:rollback',
   scriptList: 'script:list',
+  scriptTemplates: 'script:templates',
   scriptSave: 'script:save',
   scriptRemove: 'script:remove',
   scriptDryRun: 'script:dry-run',
@@ -224,5 +294,11 @@ export const IPC = {
   transferExport: 'transfer:export',
   transferImport: 'transfer:import',
   transferSave: 'transfer:save',
-  transferLoad: 'transfer:load'
+  transferLoad: 'transfer:load',
+  updateGet: 'update:get',
+  updateCheck: 'update:check',
+  updateDownload: 'update:download',
+  updateOpenFolder: 'update:open-folder',
+  updateProgress: 'update:progress',
+  updateState: 'update:state'
 } as const

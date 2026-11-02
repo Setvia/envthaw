@@ -1,11 +1,18 @@
-import { app } from 'electron'
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
-import type { AppSettings, AuditEntry, DataFiles, EnvSnapshot, ScriptEntry } from '../../shared/ipc-types'
+import type {
+  AppSettings,
+  AuditEntry,
+  DataFiles,
+  EnvSnapshot,
+  ScriptEntry,
+  ScriptTemplate
+} from '../../shared/ipc-types'
+import { configDir, dataDir, expandDeep, presetsDir } from './paths'
 
 export interface StorageLayout {
   root: string
+  dataDir: string
   files: DataFiles
 }
 
@@ -16,86 +23,20 @@ export interface RollbackPoint {
   vars: Record<string, string>
 }
 
-const BOOTSTRAP_FILE = () => path.join(app.getPath('userData'), 'config.json')
-
-function isWritable(dir: string): boolean {
-  try {
-    fs.mkdirSync(dir, { recursive: true })
-    const probe = path.join(dir, `.write-test-${process.pid}`)
-    fs.writeFileSync(probe, 'ok')
-    fs.unlinkSync(probe)
-    return true
-  } catch {
-    return false
-  }
-}
-
-/**
- * C 盘在机房环境会被冰点还原，所以默认落在非保护盘（D:\EnvThaw）。
- * 便携版（electron-builder portable）优先放在 exe 旁边；如果这些位置都不可写，
- * 依次退回应用数据目录和用户目录，避免应用直接不可用。
- */
-export function defaultStorageRoot(): string {
-  const candidates: string[] = []
-
-  // Explicit override, also used by the smoke test and by portable deployments.
-  if (process.env.ENVTHAW_STORAGE_ROOT) candidates.push(process.env.ENVTHAW_STORAGE_ROOT)
-  // electron-builder portable extracts the app and exposes the launcher directory.
-  if (process.env.PORTABLE_EXECUTABLE_DIR) candidates.push(path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'EnvThaw'))
-
-  if (process.platform === 'win32') {
-    candidates.push('D:\\EnvThaw')
-  }
-  candidates.push(path.join(app.getPath('userData'), 'EnvThaw'))
-  candidates.push(path.join(os.homedir(), 'EnvThaw'))
-
-  for (const candidate of candidates) {
-    if (candidate && isWritable(candidate)) return candidate
-  }
-  return path.join(os.homedir(), 'EnvThaw')
-}
-
-function readBootstrapRoot(): string | null {
-  try {
-    const raw = fs.readFileSync(BOOTSTRAP_FILE(), 'utf8')
-    const parsed = JSON.parse(raw) as { storageRoot?: unknown }
-    if (typeof parsed.storageRoot === 'string' && parsed.storageRoot.trim()) {
-      return parsed.storageRoot
-    }
-  } catch {
-    // first run, or a corrupt bootstrap file: fall through to the default
-  }
-  return null
-}
-
-export function getStorageRoot(): string {
-  return readBootstrapRoot() ?? defaultStorageRoot()
-}
-
-export function setStorageRoot(root: string): void {
-  fs.mkdirSync(path.dirname(BOOTSTRAP_FILE()), { recursive: true })
-  fs.writeFileSync(BOOTSTRAP_FILE(), JSON.stringify({ storageRoot: root }, null, 2), 'utf8')
-}
-
 export function getLayout(): StorageLayout {
-  const root = getStorageRoot()
+  const root = configDir()
   return {
     root,
+    dataDir: dataDir(),
     files: {
       settings: path.join(root, 'settings.json'),
       snapshots: path.join(root, 'snapshots.json'),
       scripts: path.join(root, 'scripts.json'),
       audit: path.join(root, 'audit.jsonl'),
-      rollbacks: path.join(root, 'rollbacks')
+      rollbacks: path.join(root, 'rollbacks'),
+      updates: path.join(root, 'updates')
     }
   }
-}
-
-export function ensureLayout(): StorageLayout {
-  const layout = getLayout()
-  fs.mkdirSync(layout.root, { recursive: true })
-  fs.mkdirSync(layout.files.rollbacks, { recursive: true })
-  return layout
 }
 
 export function readJson<T>(file: string, fallback: T): T {
@@ -113,12 +54,47 @@ export function writeJson(file: string, value: unknown): void {
   fs.renameSync(tmp, file)
 }
 
+/** Reads a bundled example file and expands ${DATA_DIR} style placeholders. */
+function readPreset<T>(name: string, fallback: T): T {
+  try {
+    const raw = fs.readFileSync(path.join(presetsDir(), name), 'utf8')
+    return expandDeep(JSON.parse(raw) as T)
+  } catch {
+    return fallback
+  }
+}
+
 export function defaultSettings(): AppSettings {
   return {
-    storageRoot: getStorageRoot(),
     autoSnapshotBeforeRun: true,
-    autoSnapshotBeforeRestore: true
+    autoSnapshotBeforeRestore: true,
+    updateFeedUrl: ''
   }
+}
+
+/**
+ * Creates config/ (and data/) on first run and seeds the example configuration
+ * from presets/. Only missing files are written, so user edits and deletions are
+ * never resurrected on the next start.
+ */
+export function ensureLayout(): StorageLayout {
+  const layout = getLayout()
+  fs.mkdirSync(layout.root, { recursive: true })
+  fs.mkdirSync(layout.dataDir, { recursive: true })
+  fs.mkdirSync(layout.files.rollbacks, { recursive: true })
+  fs.mkdirSync(layout.files.updates, { recursive: true })
+
+  if (!fs.existsSync(layout.files.settings)) {
+    writeJson(layout.files.settings, defaultSettings())
+  }
+  if (!fs.existsSync(layout.files.scripts)) {
+    writeJson(layout.files.scripts, readPreset<ScriptEntry[]>('scripts.json', []))
+  }
+  if (!fs.existsSync(path.join(layout.root, 'redirect.json'))) {
+    writeJson(path.join(layout.root, 'redirect.json'), readPreset<Record<string, string>>('redirect.json', {}))
+  }
+
+  return layout
 }
 
 export function readSettings(): AppSettings {
@@ -128,10 +104,9 @@ export function readSettings(): AppSettings {
 }
 
 export function writeSettings(settings: AppSettings): AppSettings {
-  const layout = ensureLayout()
-  const normalized: AppSettings = { ...settings, storageRoot: layout.root }
-  writeJson(layout.files.settings, normalized)
-  return normalized
+  ensureLayout()
+  writeJson(getLayout().files.settings, settings)
+  return settings
 }
 
 export function readSnapshots(): EnvSnapshot[] {
@@ -150,6 +125,18 @@ export function readScripts(): ScriptEntry[] {
 export function writeScripts(scripts: ScriptEntry[]): void {
   ensureLayout()
   writeJson(getLayout().files.scripts, scripts)
+}
+
+/** Templates for "new script" come from presets/script-templates.json. */
+export function readScriptTemplates(): ScriptTemplate[] {
+  const templates = readPreset<ScriptTemplate[]>('script-templates.json', [])
+  return templates.filter(
+    (template) =>
+      typeof template?.id === 'string' &&
+      typeof template?.name === 'string' &&
+      (template?.type === 'batch' || template?.type === 'powershell') &&
+      typeof template?.content === 'string'
+  )
 }
 
 export function appendAudit(entry: AuditEntry): void {

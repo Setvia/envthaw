@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "smoke": "node scripts/smoke.mjs 9223",
     "smoke:functional": "node scripts/smoke-functional.mjs 9223",
+    "smoke:update": "node scripts/smoke-update.mjs 9223",
     "package": "electron-vite build && electron-builder --win portable"
   },
   "devDependencies": {
@@ -36,6 +37,12 @@
     "files": [
       "out/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "presets",
+        "to": "presets"
+      }
     ],
     "win": {
       "target": [

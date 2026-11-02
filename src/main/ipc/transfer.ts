@@ -37,7 +37,7 @@ function importBundle(raw: unknown): ImportResult {
   const bundle = exportBundleSchema.parse(raw)
 
   if (bundle.settings) {
-    writeSettings({ ...readSettings(), ...bundle.settings, storageRoot: readSettings().storageRoot })
+    writeSettings({ ...readSettings(), ...bundle.settings })
   }
   if (bundle.redirect) {
     saveRedirectConfig(bundle.redirect)

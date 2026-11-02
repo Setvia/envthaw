@@ -96,9 +96,12 @@ const afterCleanup = await json(socket, `window.envthaw.env.list()`)
 check('cleanup', !afterCleanup.some((entry) => entry.name === TEST_VAR))
 
 // ---- scripts ----
+const info = await json(socket, `window.envthaw.app.info()`)
+const smokeDir = `${info.dataDir}\\smoke-dir`
+const scriptContent = `$env:ENVTHAW_SMOKE = '1'\nWrite-Output 'hello from script'\nNew-Item -ItemType Directory -Path '${smokeDir}' -Force | Out-Null`
 const savedScript = await json(
   socket,
-  `window.envthaw.scripts.save({ id: ${JSON.stringify(TEST_SCRIPT)}, name: 'smoke script', type: 'powershell', content: "$env:ENVTHAW_SMOKE = '1'\\nWrite-Output 'hello from script'\\nNew-Item -ItemType Directory -Path 'D:\\\\EnvThaw\\\\smoke-dir' -Force | Out-Null" })`
+  `window.envthaw.scripts.save({ id: ${JSON.stringify(TEST_SCRIPT)}, name: 'smoke script', type: 'powershell', content: ${JSON.stringify(scriptContent)} })`
 )
 check('script save', savedScript.id === TEST_SCRIPT, `id=${savedScript.id}`)
 

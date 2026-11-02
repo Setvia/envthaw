@@ -1,0 +1,23 @@
+[
+  {
+    "id": "sample-python-course",
+    "name": "示例 · Python 数据分析课",
+    "type": "powershell",
+    "createdAt": 1762000000000,
+    "content": "# 示例脚本：课程环境的“一键准备”\r\n# 由 presets/scripts.json 提供，第一次启动时写入 config/scripts.json，可自由修改或删除\r\n[Environment]::SetEnvironmentVariable('PIP_CACHE_DIR', '${DATA_DIR}\\cache\\pip', 'User')\r\n[Environment]::SetEnvironmentVariable('WORKON_HOME', '${DATA_DIR}\\venvs', 'User')\r\nNew-Item -ItemType Directory -Path '${DATA_DIR}\\cache\\pip' -Force | Out-Null\r\nNew-Item -ItemType Directory -Path '${DATA_DIR}\\venvs' -Force | Out-Null\r\nWrite-Output 'Python 环境已准备完成'\r\n"
+  },
+  {
+    "id": "sample-node-course",
+    "name": "示例 · Node 前端课",
+    "type": "powershell",
+    "createdAt": 1762000000001,
+    "content": "# 示例脚本：Node 全局目录与缓存\r\n[Environment]::SetEnvironmentVariable('NPM_CONFIG_PREFIX', '${DATA_DIR}\\node\\global', 'User')\r\n[Environment]::SetEnvironmentVariable('NPM_CONFIG_CACHE', '${DATA_DIR}\\cache\\npm', 'User')\r\nNew-Item -ItemType Directory -Path '${DATA_DIR}\\node\\global' -Force | Out-Null\r\nWrite-Output 'Node 环境已准备完成'\r\n"
+  },
+  {
+    "id": "sample-git-identity",
+    "name": "示例 · Git 临时身份",
+    "type": "powershell",
+    "createdAt": 1762000000002,
+    "content": "# 示例脚本：给公用电脑写一份临时 Git 身份\r\n# 修改成你自己的名字和邮箱后再执行\r\n[Environment]::SetEnvironmentVariable('GIT_CONFIG_GLOBAL', '${DATA_DIR}\\git\\.gitconfig', 'User')\r\nNew-Item -ItemType Directory -Path '${DATA_DIR}\\git' -Force | Out-Null\r\n@\"\r\n[user]\r\n\tname = Zhang San\r\n\temail = zhangsan@example.com\r\n\"@ | Set-Content -Path '${DATA_DIR}\\git\\.gitconfig' -Encoding UTF8\r\nWrite-Output 'Git 身份已写入临时配置文件'\r\n"
+  }
+]

@@ -1,0 +1,9 @@
+{
+  "pythonVenvHome": "${DATA_DIR}\\venvs",
+  "pipCacheDir": "${DATA_DIR}\\cache\\pip",
+  "nodePrefix": "${DATA_DIR}\\node\\global",
+  "nodeCache": "${DATA_DIR}\\cache\\npm",
+  "gitConfigPath": "${DATA_DIR}\\git\\.gitconfig",
+  "gitUserName": "",
+  "gitUserEmail": ""
+}

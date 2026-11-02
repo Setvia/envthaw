@@ -57,9 +57,19 @@ export const redirectConfigSchema = z.object({
 })
 
 export const appSettingsSchema = z.object({
-  storageRoot: z.string().min(1).max(500),
   autoSnapshotBeforeRun: z.boolean(),
-  autoSnapshotBeforeRestore: z.boolean()
+  autoSnapshotBeforeRestore: z.boolean(),
+  // Empty until the project site exists; https, or loopback http for local testing.
+  updateFeedUrl: z
+    .string()
+    .max(500)
+    .refine(
+      (value) =>
+        value === '' ||
+        /^https:\/\/[^\s]+$/i.test(value) ||
+        /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/[^\s]*)?$/i.test(value),
+      '更新源必须是 https 地址（本地测试可用 http://127.0.0.1）'
+    )
 })
 
 export const exportBundleSchema = z.object({

@@ -60,9 +60,9 @@ export function Dashboard({ onNavigate }: DashboardProps): ReactElement {
     }
   }
 
-  async function openStorage(): Promise<void> {
+  async function openConfigDir(): Promise<void> {
     try {
-      await api.app.openStorage()
+      await api.app.openConfigDir()
     } catch (error) {
       toast('error', errorText(error))
     }
@@ -96,14 +96,18 @@ export function Dashboard({ onNavigate }: DashboardProps): ReactElement {
           </button>
         </div>
         <div className="card">
-          <p className="card-title">存储位置</p>
-          <div className="stat-value" style={{ fontSize: 16, marginTop: 14, fontWeight: 600, wordBreak: 'break-all' }}>
-            {info?.storageRoot ?? '读取中…'}
+          <p className="card-title">配置目录</p>
+          <div
+            className="stat-value dash-path"
+            title={info?.configDir ?? ''}
+            style={{ fontSize: 15, marginTop: 14, fontWeight: 600 }}
+          >
+            {info?.configDir ?? '读取中…'}
           </div>
           <p className="stat-label" style={{ marginTop: 6 }}>
-            非保护盘 · 重启不丢
+            固定在项目内 · 已 gitignore
           </p>
-          <button className="btn small ghost" style={{ marginTop: 6, paddingLeft: 0 }} onClick={() => void openStorage()}>
+          <button className="btn small ghost" style={{ marginTop: 6, paddingLeft: 0 }} onClick={() => void openConfigDir()}>
             在资源管理器中打开 →
           </button>
         </div>

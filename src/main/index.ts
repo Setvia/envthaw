@@ -1,11 +1,13 @@
 import { app, BrowserWindow, Menu } from 'electron'
 import path from 'node:path'
 import { registerAppHandlers, registerSettingsHandlers } from './ipc/app'
+import { registerAuditHandlers } from './ipc/audit'
 import { registerEnvHandlers } from './ipc/env'
 import { registerPathHandlers } from './ipc/path'
 import { registerScriptHandlers } from './ipc/script'
 import { registerTransferHandlers } from './ipc/transfer'
-import { registerAuditHandlers } from './ipc/audit'
+import { registerUpdateHandlers } from './ipc/update'
+import { registerWindowHandlers, wireWindowState } from './ipc/window'
 
 // Chromium's profile lives under %APPDATA% by default, which is exactly the disk
 // this tool exists to avoid - and on locked-down machines it may not even be
@@ -27,8 +29,12 @@ function createWindow(): BrowserWindow {
     minWidth: 1024,
     minHeight: 660,
     show: false,
+    // The window chrome is drawn by the renderer (components/TitleBar.tsx), the
+    // same way the DSH desktop app does it.
+    frame: false,
+    titleBarStyle: 'hidden',
     autoHideMenuBar: true,
-    backgroundColor: '#f6f7fb',
+    backgroundColor: '#f4f6fb',
     title: 'EnvThaw · 环境管理器',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
@@ -41,6 +47,7 @@ function createWindow(): BrowserWindow {
 
   window.once('ready-to-show', () => window.show())
   window.setMenuBarVisibility(false)
+  wireWindowState(window)
 
   // The renderer is a pure web app; it must never navigate away or open windows.
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
@@ -79,6 +86,8 @@ app.whenReady().then(() => {
   registerPathHandlers()
   registerTransferHandlers()
   registerAuditHandlers()
+  registerWindowHandlers()
+  registerUpdateHandlers()
 
   createWindow()
 
