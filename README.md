@@ -68,6 +68,10 @@ config/                      # 运行时配置（gitignore）
 
 data/                        # 重定向指向的工作数据（venv / 缓存），gitignore
 
+resources/
+├── icon.ico                 # 应用图标（16/24/32/48/64/128/256），electron-builder 使用
+└── icon.png                 # 同一图标的 1024 透明版本（源图素材）
+
 src/
 ├── main/
 │   ├── index.ts             # 入口、无边框窗口、生命周期
@@ -97,6 +101,16 @@ npm run typecheck
 ```
 
 `F12` / `Ctrl+Shift+I` 打开的是**独立窗口**的 DevTools（`mode: 'detach'`），不会挤占应用窗口布局，仍在同一个进程内。
+
+### 图标
+
+`assets/icon.png` 是原始素材（白色画布）。执行：
+
+```bash
+python scripts/make_icon.py   # 需要 Pillow
+```
+
+会裁掉白底、按原图圆角生成透明边，输出 `resources/icon.ico`（多尺寸）、`resources/icon.png`（1024 透明 PNG）和标题栏用的 `src/renderer/src/assets/icon.png`。electron-builder 的图标由 `build.win.icon` 指向 `resources/icon.ico`，开发态窗口图标也用它。
 
 ### Windows 启动器说明（`scripts/launch.js`）
 
@@ -176,7 +190,14 @@ npm run smoke:users      # 多用户：创建/切换/删除、脚本导入拷贝
 - 用户切换会整体重载界面（简单可靠，但不是无刷新切换）
 - 系统级环境变量仅做只读展示，修改需要管理员权限，按文档要求不做
 - `--no-sandbox` 兜底模式下无法写环境变量（Windows 完整性级别限制）
-- `npm run package` 需要先安装 `electron-builder`（未随依赖安装）
+
+## 打包
+
+```bash
+npm run package   # electron-vite build + electron-builder --win portable
+```
+
+产物在 `release/EnvThaw-<version>-portable.exe`，图标取自 `resources/icon.ico`。
 
 ## License
 

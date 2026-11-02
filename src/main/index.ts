@@ -37,6 +37,9 @@ function createWindow(): BrowserWindow {
     autoHideMenuBar: true,
     backgroundColor: '#f4f6fb',
     title: 'EnvThaw · 环境管理器',
+    // Packaged builds take the icon from the executable; the dev run needs it
+    // passed explicitly or the taskbar shows the generic Electron icon.
+    icon: app.isPackaged ? undefined : path.join(app.getAppPath(), 'resources', 'icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       sandbox: true,

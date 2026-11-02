@@ -75,7 +75,7 @@ export function Dashboard({ onNavigate }: DashboardProps): ReactElement {
           <p className="card-title">用户环境变量</p>
           <div className="stat-value">{vars.length}</div>
           <p className="stat-label">HKCU\Environment</p>
-          <button className="btn small ghost" style={{ marginTop: 8, paddingLeft: 0 }} onClick={() => onNavigate('env')}>
+          <button className="btn small ghost" style={{ marginTop: 8, paddingLeft: 5 }} onClick={() => onNavigate('env')}>
             管理 →
           </button>
         </div>
@@ -83,7 +83,7 @@ export function Dashboard({ onNavigate }: DashboardProps): ReactElement {
           <p className="card-title">环境快照</p>
           <div className="stat-value">{snapshots.length}</div>
           <p className="stat-label">可一键恢复</p>
-          <button className="btn small ghost" style={{ marginTop: 8, paddingLeft: 0 }} onClick={() => onNavigate('snapshots')}>
+          <button className="btn small ghost" style={{ marginTop: 8, paddingLeft: 5 }} onClick={() => onNavigate('snapshots')}>
             查看 →
           </button>
         </div>
@@ -91,7 +91,7 @@ export function Dashboard({ onNavigate }: DashboardProps): ReactElement {
           <p className="card-title">脚本库</p>
           <div className="stat-value">{scripts.length}</div>
           <p className="stat-label">执行前自带 dry-run</p>
-          <button className="btn small ghost" style={{ marginTop: 8, paddingLeft: 0 }} onClick={() => onNavigate('scripts')}>
+          <button className="btn small ghost" style={{ marginTop: 8, paddingLeft: 5 }} onClick={() => onNavigate('scripts')}>
             打开 →
           </button>
         </div>
@@ -107,7 +107,7 @@ export function Dashboard({ onNavigate }: DashboardProps): ReactElement {
           <p className="stat-label" style={{ marginTop: 6 }}>
             固定在项目内 · 已 gitignore
           </p>
-          <button className="btn small ghost" style={{ marginTop: 6, paddingLeft: 0 }} onClick={() => void openConfigDir()}>
+          <button className="btn small ghost" style={{ marginTop: 6, paddingLeft: 5 }} onClick={() => void openConfigDir()}>
             在资源管理器中打开 →
           </button>
         </div>

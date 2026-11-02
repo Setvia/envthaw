@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { api } from '../lib/api'
+import brandIcon from '../assets/icon.png'
 
 /**
  * In-page title bar: the window is frameless, so dragging, double-click
@@ -17,7 +18,7 @@ export function TitleBar({ section }: { section: string }): ReactElement {
   return (
     <header className="titlebar">
       <div className="titlebar-brand">
-        <span className="brand-mark tiny">E</span>
+        <img className="brand-mark tiny" src={brandIcon} alt="" draggable={false} />
         <span className="titlebar-app">EnvThaw</span>
         <span className="titlebar-divider" />
         <span className="titlebar-section">{section}</span>
