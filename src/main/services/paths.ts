@@ -10,6 +10,12 @@ import path from 'node:path'
  * the directory that contains the executable, so the whole tool stays portable.
  */
 export function projectRoot(): string {
+  // electron-builder's portable target unpacks to %TEMP% and runs from there, so
+  // app.getPath('exe') points at a throwaway directory. PORTABLE_EXECUTABLE_DIR
+  // is the real folder the user launched the portable exe from - config must
+  // live there, otherwise it is deleted as soon as the app exits.
+  const portableDir = process.env.PORTABLE_EXECUTABLE_DIR?.trim()
+  if (portableDir) return portableDir
   return app.isPackaged ? path.dirname(app.getPath('exe')) : app.getAppPath()
 }
 

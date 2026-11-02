@@ -9,12 +9,16 @@ import { registerTransferHandlers } from './ipc/transfer'
 import { registerUpdateHandlers } from './ipc/update'
 import { registerUserHandlers } from './ipc/users'
 import { registerWindowHandlers, wireWindowState } from './ipc/window'
+import { configDir } from './services/paths'
 
 // Chromium's profile lives under %APPDATA% by default, which is exactly the disk
 // this tool exists to avoid - and on locked-down machines it may not even be
-// creatable. Dev runs keep it inside the project so a reboot/restore cannot
-// corrupt the working copy.
-if (!app.isPackaged) {
+// creatable. Dev runs keep it inside the project; portable runs keep it next to
+// the portable exe so the whole tool stays self-contained.
+const portableDir = process.env.PORTABLE_EXECUTABLE_DIR?.trim()
+if (portableDir) {
+  app.setPath('userData', path.join(configDir(), 'chromium-profile'))
+} else if (!app.isPackaged) {
   app.setPath('userData', path.join(app.getAppPath(), '.electron-profile'))
 }
 
