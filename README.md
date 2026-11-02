@@ -96,6 +96,8 @@ npm run build    # 只构建
 npm run typecheck
 ```
 
+`F12` / `Ctrl+Shift+I` 打开的是**独立窗口**的 DevTools（`mode: 'detach'`），不会挤占应用窗口布局，仍在同一个进程内。
+
 ### Windows 启动器说明（`scripts/launch.js`）
 
 这台机器上踩到的三个坑，启动器里都做了处理，不必手动干预：

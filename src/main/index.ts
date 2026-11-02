@@ -60,10 +60,16 @@ function createWindow(): BrowserWindow {
   })
 
   // Keep a way into DevTools even though the menu is hidden.
+  // The window is frameless, so DevTools must never dock into the page: it opens
+  // as its own OS window, while still belonging to this same app process.
   window.webContents.on('before-input-event', (_event, input) => {
     const isToggle = input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i')
-    if (isToggle && input.type === 'keyDown') {
-      window.webContents.toggleDevTools()
+    if (!isToggle || input.type !== 'keyDown') return
+
+    if (window.webContents.isDevToolsOpened()) {
+      window.webContents.closeDevTools()
+    } else {
+      window.webContents.openDevTools({ mode: 'detach', activate: true })
     }
   })
 
