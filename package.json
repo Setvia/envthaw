@@ -1,0 +1,54 @@
+{
+  "name": "envthaw",
+  "productName": "EnvThaw",
+  "version": "0.1.0",
+  "description": "EnvThaw - 面向学生开发者的可持久化环境编排工具",
+  "author": "Setvia",
+  "license": "BUSL-1.1",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "node scripts/launch.js dev",
+    "build": "electron-vite build",
+    "start": "node scripts/launch.js preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "smoke": "node scripts/smoke.mjs 9223",
+    "smoke:functional": "node scripts/smoke-functional.mjs 9223",
+    "package": "electron-vite build && electron-builder --win portable"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "electron": "^45.2.0",
+    "electron-vite": "^6.0.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "zod": "^4.6.7"
+  },
+  "build": {
+    "appId": "com.setvia.envthaw",
+    "productName": "EnvThaw",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "EnvThaw-${version}-portable.exe"
+    }
+  }
+}
