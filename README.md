@@ -207,6 +207,40 @@ npm run smoke -- http://127.0.0.1:8787       # 20 项端到端检查
 本地部署用 PGlite 代替 PostgreSQL、进程内缓存代替 Redis、本地目录代替对象存储、
 DEV_MODE 代替邮件服务，切换生产组件的说明见该仓库的 README。
 
+客户端已经接入（设置 → 云同步）：服务器地址、邮箱验证码登录、立即同步、
+冲突时「保留本地 / 使用云端」。对接冒烟测试：
+
+```bash
+# 1) 后端：在 envthaw-server 目录 npm start
+# 2) 客户端：ENVTHAW_DEBUG_PORT=9223 npm start
+# 3) 跑对接测试（登录 → 推送 → 另一台设备拉取 → 退出）
+npm run smoke:cloud
+```
+
+## 仓库安全约定
+
+本仓库是**公开仓库**，以下内容不得提交：
+
+- 后端 / 服务端代码（单独仓库维护，本地放在项目同级目录）
+- 密钥、证书、`.env`（`.env.example` 除外）
+- 运行时数据 `data/`、`config/`
+- 未公开的商业文档（`.docx`）
+
+仓库自带 git 钩子（`.githooks/`）：
+
+| 钩子 | 行为 |
+| --- | --- |
+| `pre-commit` | staged 中出现上述路径 → 拒绝提交 |
+| `pre-push` | 本次推送的提交范围包含上述路径 → 拒绝推送 |
+
+`npm install` 时由 `prepare` 脚本自动执行 `git config core.hooksPath .githooks`。
+
+确需提交到私有仓库或临时分支时才放行：
+
+```bash
+ENVTHAW_ALLOW_SENSITIVE=1 git commit ...   # 或 git push
+```
+
 ## 已知限制
 
 - 云同步、账号、课程模板市场、Agent 辅助均未实现（文档中的付费/后置能力）

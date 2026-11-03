@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react'
-import type { AppInfo, AppSettings, UpdateProgress, UpdateState } from '../../../shared/ipc-types'
+import type { AppInfo, AppSettings, CloudStatus, UpdateProgress, UpdateState } from '../../../shared/ipc-types'
 import { api, errorText, formatTime } from '../lib/api'
 import { useToast } from '../components/Toast'
 
@@ -37,14 +37,27 @@ export function SettingsPage(): ReactElement {
   const [update, setUpdate] = useState<UpdateState | null>(null)
   const [progress, setProgress] = useState<UpdateProgress | null>(null)
   const [busy, setBusy] = useState(false)
+  const [cloud, setCloud] = useState<CloudStatus | null>(null)
+  const [cloudServer, setCloudServer] = useState('')
+  const [cloudEmail, setCloudEmail] = useState('')
+  const [cloudCode, setCloudCode] = useState('')
+  const [cloudDevCode, setCloudDevCode] = useState('')
+  const [cloudBusy, setCloudBusy] = useState(false)
 
   const load = useCallback(async () => {
     setBusy(true)
     try {
-      const [current, appInfo, updateState] = await Promise.all([api.settings.get(), api.app.info(), api.update.getState()])
+      const [current, appInfo, updateState, cloudState] = await Promise.all([
+        api.settings.get(),
+        api.app.info(),
+        api.update.getState(),
+        api.cloud.status()
+      ])
       setSettings(current)
       setInfo(appInfo)
       setUpdate(updateState)
+      setCloud(cloudState)
+      setCloudServer(cloudState.serverUrl)
       setProgress(updateState.progress ?? null)
     } catch (error) {
       toast('error', errorText(error))
@@ -143,6 +156,90 @@ export function SettingsPage(): ReactElement {
       toast('error', errorText(error))
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function saveCloudServer(): Promise<void> {
+    setCloudBusy(true)
+    try {
+      const state = await api.cloud.setServer(cloudServer)
+      setCloud(state)
+      setCloudServer(state.serverUrl)
+      toast('success', '服务器地址已保存')
+    } catch (error) {
+      toast('error', errorText(error))
+    } finally {
+      setCloudBusy(false)
+    }
+  }
+
+  async function sendCloudCode(): Promise<void> {
+    setCloudBusy(true)
+    setCloudDevCode('')
+    try {
+      const result = await api.cloud.loginStart(cloudEmail)
+      if (result.devCode) setCloudDevCode(result.devCode)
+      toast('success', result.devCode ? `开发模式验证码：${result.devCode}` : '验证码已发送，请查收邮箱')
+    } catch (error) {
+      toast('error', errorText(error))
+    } finally {
+      setCloudBusy(false)
+    }
+  }
+
+  async function verifyCloudCode(): Promise<void> {
+    setCloudBusy(true)
+    try {
+      const state = await api.cloud.loginVerify(cloudEmail, cloudCode)
+      setCloud(state)
+      setCloudCode('')
+      setCloudDevCode('')
+      toast('success', '已登录云同步')
+    } catch (error) {
+      toast('error', errorText(error))
+    } finally {
+      setCloudBusy(false)
+    }
+  }
+
+  async function syncCloud(): Promise<void> {
+    setCloudBusy(true)
+    try {
+      const report = await api.cloud.syncNow()
+      setCloud(await api.cloud.status())
+      toast(
+        'success',
+        `同步完成：上传 ${report.pushed} 个，下载 ${report.pulled} 个${report.conflicts ? `，${report.conflicts} 个待解决` : ''}`
+      )
+    } catch (error) {
+      toast('error', errorText(error))
+    } finally {
+      setCloudBusy(false)
+    }
+  }
+
+  async function signOutCloud(): Promise<void> {
+    setCloudBusy(true)
+    try {
+      setCloud(await api.cloud.logout())
+      toast('success', '已退出云同步')
+    } catch (error) {
+      toast('error', errorText(error))
+    } finally {
+      setCloudBusy(false)
+    }
+  }
+
+  async function resolveCloudConflict(id: string, choice: 'local' | 'remote'): Promise<void> {
+    setCloudBusy(true)
+    try {
+      await api.cloud.resolveConflict(id, choice)
+      setCloud(await api.cloud.status())
+      toast('success', choice === 'local' ? '已保留本地版本' : '已采用云端版本')
+    } catch (error) {
+      toast('error', errorText(error))
+    } finally {
+      setCloudBusy(false)
     }
   }
 
@@ -281,6 +378,113 @@ export function SettingsPage(): ReactElement {
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="card stack" style={{ gap: 14 }}>
+        <div>
+          <h3 className="card-title">云同步</h3>
+          <p className="card-sub">
+            把快照同步到自建后端；未登录时所有功能仍然本地可用。默认地址 <code>{cloud?.serverUrl ?? '—'}</code>。
+          </p>
+        </div>
+
+        <div className="field">
+          <label className="field-label">服务器地址</label>
+          <div className="row">
+            <input
+              className="input mono"
+              value={cloudServer}
+              placeholder="http://127.0.0.1:8787"
+              onChange={(event) => setCloudServer(event.target.value)}
+            />
+            <button className="btn" onClick={() => void saveCloudServer()} disabled={cloudBusy}>
+              保存
+            </button>
+          </div>
+        </div>
+
+        {!cloud?.signedIn ? (
+          <>
+            <div className="field">
+              <label className="field-label">邮箱</label>
+              <div className="row">
+                <input
+                  className="input"
+                  placeholder="you@example.edu"
+                  value={cloudEmail}
+                  onChange={(event) => setCloudEmail(event.target.value)}
+                />
+                <button className="btn" onClick={() => void sendCloudCode()} disabled={cloudBusy || !cloudEmail.trim()}>
+                  发送验证码
+                </button>
+              </div>
+            </div>
+            <div className="field">
+              <label className="field-label">验证码</label>
+              <div className="row">
+                <input
+                  className="input mono"
+                  placeholder="6 位数字"
+                  maxLength={6}
+                  value={cloudCode}
+                  onChange={(event) => setCloudCode(event.target.value.replace(/\D/g, ''))}
+                />
+                <button
+                  className="btn primary"
+                  onClick={() => void verifyCloudCode()}
+                  disabled={cloudBusy || cloudCode.length !== 6}
+                >
+                  登录
+                </button>
+              </div>
+              {cloudDevCode ? <span className="field-hint">开发模式验证码：{cloudDevCode}</span> : null}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="update-head">
+              <span className="status-dot green" />
+              <strong>{cloud.email}</strong>
+              <span className="muted">待同步 {cloud.pending} 个快照</span>
+              {cloud.lastSyncAt ? <span className="muted">· {formatTime(cloud.lastSyncAt)}</span> : null}
+            </div>
+
+            {cloud.conflicts.length > 0 ? (
+              <div className="stack" style={{ gap: 8 }}>
+                <div className="badge amber" style={{ height: 'auto', padding: '8px 10px', whiteSpace: 'normal' }}>
+                  {cloud.conflicts.length} 个快照需要手动解决冲突
+                </div>
+                {cloud.conflicts.map((conflict) => (
+                  <div key={conflict.id} className="row wrap" style={{ justifyContent: 'space-between', gap: 8 }}>
+                    <div>
+                      <strong>{conflict.snapshotName}</strong>
+                      <div className="muted">
+                        {conflict.keys.length > 0 ? conflict.keys.map((item) => item.key).join('、') : '两端都改过，无法自动合并'}
+                      </div>
+                    </div>
+                    <div className="row">
+                      <button className="btn" onClick={() => void resolveCloudConflict(conflict.id, 'local')} disabled={cloudBusy}>
+                        保留本地
+                      </button>
+                      <button className="btn" onClick={() => void resolveCloudConflict(conflict.id, 'remote')} disabled={cloudBusy}>
+                        使用云端
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="row wrap">
+              <button className="btn primary" onClick={() => void syncCloud()} disabled={cloudBusy}>
+                立即同步
+              </button>
+              <button className="btn" onClick={() => void signOutCloud()} disabled={cloudBusy}>
+                退出登录
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="grid cols-2">

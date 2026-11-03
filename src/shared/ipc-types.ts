@@ -219,6 +219,49 @@ export interface UpdateState {
   checkedAt?: number
 }
 
+/* ------------------------------------------------------------------ cloud */
+
+export interface CloudConflictKey {
+  key: string
+  base?: string
+  local?: string
+  remote?: string
+}
+
+export interface CloudConflict {
+  id: string
+  clientRef: string
+  snapshotName: string
+  serverVersion: number
+  localHash: string
+  remoteBlobId: string | null
+  keys: CloudConflictKey[]
+}
+
+export interface CloudStatus {
+  serverUrl: string
+  signedIn: boolean
+  email?: string
+  deviceId?: string
+  pending: number
+  conflicts: CloudConflict[]
+  lastSyncAt?: number
+}
+
+export interface CloudLoginStart {
+  expiresIn: number
+  /** Present only while the backend runs with DEV_MODE=1. */
+  devCode?: string
+}
+
+export interface CloudSyncReport {
+  pushed: number
+  pulled: number
+  conflicts: number
+  cursor: number
+  at: number
+}
+
 export interface EnvThawApi {
   app: {
     info(): Promise<AppInfo>
@@ -299,6 +342,15 @@ export interface EnvThawApi {
     onProgress(callback: (progress: UpdateProgress) => void): () => void
     onState(callback: (state: UpdateState) => void): () => void
   }
+  cloud: {
+    status(): Promise<CloudStatus>
+    setServer(url: string): Promise<CloudStatus>
+    loginStart(email: string): Promise<CloudLoginStart>
+    loginVerify(email: string, code: string): Promise<CloudStatus>
+    logout(): Promise<CloudStatus>
+    syncNow(): Promise<CloudSyncReport>
+    resolveConflict(id: string, choice: 'local' | 'remote'): Promise<CloudSyncReport>
+  }
 }
 
 /** Channel names, grouped so a typo cannot silently create a dead channel. */
@@ -350,5 +402,12 @@ export const IPC = {
   updateDownload: 'update:download',
   updateOpenFolder: 'update:open-folder',
   updateProgress: 'update:progress',
-  updateState: 'update:state'
+  updateState: 'update:state',
+  cloudStatus: 'cloud:status',
+  cloudSetServer: 'cloud:set-server',
+  cloudLoginStart: 'cloud:login-start',
+  cloudLoginVerify: 'cloud:login-verify',
+  cloudLogout: 'cloud:logout',
+  cloudSync: 'cloud:sync',
+  cloudResolve: 'cloud:resolve-conflict'
 } as const

@@ -1,0 +1,34 @@
+#!/bin/sh
+# EnvThaw 仓库安全钩子：阻止把后端代码、密钥、运行数据提交进公开仓库。
+# 需要临时放行时：ENVTHAW_ALLOW_SENSITIVE=1 git commit ...
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+. "$ROOT/.githooks/lib-deny.sh"
+
+bad=""
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  if envthaw_is_sensitive "$f"; then
+    bad="$bad
+  - $f"
+  fi
+done <<EOF
+$(git diff --cached --name-only --diff-filter=ACM)
+EOF
+
+if [ -n "$bad" ]; then
+  if [ "${ENVTHAW_ALLOW_SENSITIVE:-0}" = "1" ]; then
+    echo "⚠️  ENVTHAW_ALLOW_SENSITIVE=1，放行以下敏感路径：$bad" >&2
+    exit 0
+  fi
+  echo "" >&2
+  echo "✋ 提交被阻止：以下路径不允许进入公开仓库" >&2
+  echo "$bad" >&2
+  echo "" >&2
+  echo "  后端代码请放在项目同级目录（如 ../envthaw-server），" >&2
+  echo "  密钥与运行数据请在 .gitignore 覆盖的位置生成。" >&2
+  echo "  确认目标仓库是私有时，才使用：" >&2
+  echo "    ENVTHAW_ALLOW_SENSITIVE=1 git commit ..." >&2
+  echo "" >&2
+  exit 1
+fi
+exit 0

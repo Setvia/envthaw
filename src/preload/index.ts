@@ -85,6 +85,15 @@ const api: EnvThawApi = {
     openDownloadFolder: () => ipcRenderer.invoke(IPC.updateOpenFolder),
     onProgress: (callback) => subscribe<UpdateProgress>(IPC.updateProgress, callback),
     onState: (callback) => subscribe<UpdateState>(IPC.updateState, callback)
+  },
+  cloud: {
+    status: () => ipcRenderer.invoke(IPC.cloudStatus),
+    setServer: (url) => ipcRenderer.invoke(IPC.cloudSetServer, url),
+    loginStart: (email) => ipcRenderer.invoke(IPC.cloudLoginStart, email),
+    loginVerify: (email, code) => ipcRenderer.invoke(IPC.cloudLoginVerify, email, code),
+    logout: () => ipcRenderer.invoke(IPC.cloudLogout),
+    syncNow: () => ipcRenderer.invoke(IPC.cloudSync),
+    resolveConflict: (id, choice) => ipcRenderer.invoke(IPC.cloudResolve, id, choice)
   }
 }
 
