@@ -233,6 +233,13 @@ export async function loginVerify(email: string, code: string): Promise<CloudSta
   accessToken = result.access_token
   accessExpiresAt = Date.now() + Math.max(30, result.expires_in - 10) * 1000
 
+  // Switching to a different account must not inherit the previous sync cursor,
+  // version mapping or unresolved conflicts.
+  if (previous && previous.userId !== result.user.id) {
+    writeState({ ...defaultState(), serverUrl: state.serverUrl })
+    return cloudStatus()
+  }
+
   const next = readState()
   next.serverUrl = state.serverUrl
   writeState(next)

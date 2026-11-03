@@ -5,8 +5,9 @@ const port = Number(process.argv[2] ?? 9223)
 const apiBase = (process.argv[3] ?? 'http://127.0.0.1:8787').replace(/\/$/, '')
 const { createHash } = await import('node:crypto')
 
-const EMAIL = 'cloud-smoke@example.edu'
-const REMOTE_REF = 'snap-cloud-remote-1'
+const RUN = Date.now().toString(36)
+const EMAIL = `cloud-smoke-${RUN}@example.edu`
+const REMOTE_REF = `snap-cloud-remote-${RUN}`
 
 async function waitForTarget() {
   for (let attempt = 0; attempt < 40; attempt += 1) {
