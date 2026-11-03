@@ -192,25 +192,20 @@ npm run smoke:users      # 多用户：创建/切换/删除、脚本导入拷贝
 - 可选端到端加密（密钥层级、设备注册、取舍）
 - API 契约、客户端接入改造点、部署/监控/SLO、成本、合规、3 周排期
 
-### 本地部署版（可运行）
+### 本地部署版
 
-后端代码**不在本仓库**，单独放在项目同级的 `envthaw-server/` 目录（独立 git 仓库）：
-
-```
-E:\Setvia\Tools\InitEnvPath\
-├── SetviaEnvMgrElectron\   ← 本仓库（桌面端）
-└── envthaw-server\         ← 云后端（Fastify + PGlite + 本地 blob 存储）
-```
+后端代码**单独维护，不在本仓库**（独立仓库，本地开发时放在项目同级目录）。它实现了上述设计稿的
+M6 最小闭环：邮箱验证码登录、设备与令牌轮换、blob 预签名上传、基于 change_log 的增量同步、
+幂等 mutation、乐观锁与三路合并、软删除墓碑、配额。
 
 ```bash
-cd ..\envthaw-server
+cd ../envthaw-server
 npm install && npm start                     # 0.0.0.0:8787
 npm run smoke -- http://127.0.0.1:8787       # 20 项端到端检查
 ```
 
-账号、设备、令牌轮换、blob 预签名、增量同步、幂等、三路合并、冲突、软删除、配额都已实现；
-Postgres→PGlite、Redis→进程内、OSS→本地目录、邮件→DEV_MODE 是本地替代，切换方式见该目录下的
-`README.md`。
+本地部署用 PGlite 代替 PostgreSQL、进程内缓存代替 Redis、本地目录代替对象存储、
+DEV_MODE 代替邮件服务，切换生产组件的说明见该仓库的 README。
 
 ## 已知限制
 
