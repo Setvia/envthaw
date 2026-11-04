@@ -219,6 +219,33 @@ export interface UpdateState {
   checkedAt?: number
 }
 
+/* ------------------------------------------------------------------ terminal */
+
+export interface TerminalSessionInfo {
+  id: string
+  title: string
+  cwd: string
+  running: boolean
+  createdAt: number
+}
+
+export interface TerminalDataEvent {
+  id: string
+  chunk: string
+}
+
+export interface TerminalExitEvent {
+  id: string
+  code: number | null
+  durationMs: number
+  timedOut: boolean
+}
+
+export interface TerminalCwdEvent {
+  id: string
+  cwd: string
+}
+
 /* ------------------------------------------------------------------ cloud */
 
 export interface CloudConflictKey {
@@ -351,6 +378,20 @@ export interface EnvThawApi {
     syncNow(): Promise<CloudSyncReport>
     resolveConflict(id: string, choice: 'local' | 'remote'): Promise<CloudSyncReport>
   }
+  terminal: {
+    list(): Promise<TerminalSessionInfo[]>
+    create(): Promise<TerminalSessionInfo>
+    close(id: string): Promise<void>
+    rename(id: string, title: string): Promise<void>
+    run(id: string, command: string): Promise<void>
+    stop(id: string): Promise<void>
+    clear(id: string): Promise<void>
+    buffer(id: string): Promise<string>
+    onData(callback: (event: TerminalDataEvent) => void): () => void
+    onExit(callback: (event: TerminalExitEvent) => void): () => void
+    onCwd(callback: (event: TerminalCwdEvent) => void): () => void
+    onCleared(callback: (event: { id: string }) => void): () => void
+  }
 }
 
 /** Channel names, grouped so a typo cannot silently create a dead channel. */
@@ -409,5 +450,17 @@ export const IPC = {
   cloudLoginVerify: 'cloud:login-verify',
   cloudLogout: 'cloud:logout',
   cloudSync: 'cloud:sync',
-  cloudResolve: 'cloud:resolve-conflict'
+  cloudResolve: 'cloud:resolve-conflict',
+  terminalList: 'terminal:list',
+  terminalCreate: 'terminal:create',
+  terminalClose: 'terminal:close',
+  terminalRename: 'terminal:rename',
+  terminalRun: 'terminal:run',
+  terminalStop: 'terminal:stop',
+  terminalClear: 'terminal:clear',
+  terminalBuffer: 'terminal:buffer',
+  terminalData: 'terminal:data',
+  terminalExit: 'terminal:exit',
+  terminalCwd: 'terminal:cwd',
+  terminalCleared: 'terminal:cleared'
 } as const

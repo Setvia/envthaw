@@ -10,6 +10,7 @@ import { registerUpdateHandlers } from './ipc/update'
 import { registerUserHandlers } from './ipc/users'
 import { registerWindowHandlers, wireWindowState } from './ipc/window'
 import { registerCloudHandlers } from './ipc/cloud'
+import { registerTerminalHandlers } from './ipc/terminal'
 import { configDir } from './services/paths'
 
 // Chromium's profile lives under %APPDATA% by default, which is exactly the disk
@@ -117,6 +118,7 @@ app.whenReady().then(() => {
   registerWindowHandlers()
   registerUpdateHandlers()
   registerCloudHandlers()
+  registerTerminalHandlers()
 
   createWindow()
 

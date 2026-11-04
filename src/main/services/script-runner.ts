@@ -196,7 +196,7 @@ function writeTempScript(script: ScriptEntry): string {
   return file
 }
 
-async function childEnv(): Promise<NodeJS.ProcessEnv> {
+export async function shellEnv(): Promise<NodeJS.ProcessEnv> {
   // Expanded values only: an unexpanded Path (%SystemRoot%\...) cannot be used to
   // resolve powershell.exe and children would fail with ENOENT.
   const userEnv = toEnvRecord(await readUserEnv(true))
@@ -273,7 +273,7 @@ export async function runScript(script: ScriptEntry): Promise<RunResult> {
   }
 
   const file = writeTempScript(script)
-  const env = await childEnv()
+  const env = await shellEnv()
 
   const result =
     script.type === 'batch'

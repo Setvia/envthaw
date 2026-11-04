@@ -1,5 +1,13 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import { IPC, type EnvThawApi, type UpdateProgress, type UpdateState } from '../shared/ipc-types'
+import {
+  IPC,
+  type EnvThawApi,
+  type TerminalCwdEvent,
+  type TerminalDataEvent,
+  type TerminalExitEvent,
+  type UpdateProgress,
+  type UpdateState
+} from '../shared/ipc-types'
 
 function subscribe<T>(channel: string, callback: (payload: T) => void): () => void {
   const listener = (_event: Electron.IpcRendererEvent, payload: T): void => callback(payload)
@@ -94,6 +102,20 @@ const api: EnvThawApi = {
     logout: () => ipcRenderer.invoke(IPC.cloudLogout),
     syncNow: () => ipcRenderer.invoke(IPC.cloudSync),
     resolveConflict: (id, choice) => ipcRenderer.invoke(IPC.cloudResolve, id, choice)
+  },
+  terminal: {
+    list: () => ipcRenderer.invoke(IPC.terminalList),
+    create: () => ipcRenderer.invoke(IPC.terminalCreate),
+    close: (id) => ipcRenderer.invoke(IPC.terminalClose, id),
+    rename: (id, title) => ipcRenderer.invoke(IPC.terminalRename, id, title),
+    run: (id, command) => ipcRenderer.invoke(IPC.terminalRun, id, command),
+    stop: (id) => ipcRenderer.invoke(IPC.terminalStop, id),
+    clear: (id) => ipcRenderer.invoke(IPC.terminalClear, id),
+    buffer: (id) => ipcRenderer.invoke(IPC.terminalBuffer, id),
+    onData: (callback) => subscribe<TerminalDataEvent>(IPC.terminalData, callback),
+    onExit: (callback) => subscribe<TerminalExitEvent>(IPC.terminalExit, callback),
+    onCwd: (callback) => subscribe<TerminalCwdEvent>(IPC.terminalCwd, callback),
+    onCleared: (callback) => subscribe<{ id: string }>(IPC.terminalCleared, callback)
   }
 }
 
