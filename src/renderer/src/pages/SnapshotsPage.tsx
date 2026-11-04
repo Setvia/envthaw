@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import type { DiffEntry, EnvSnapshot } from '../../../shared/ipc-types'
 import { api, diffSummary, errorText, formatTime } from '../lib/api'
 import { useToast } from '../components/Toast'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Modal } from '../components/Modal'
 import { DiffTable } from '../components/DiffTable'
 
@@ -13,6 +14,7 @@ export function SnapshotsPage(): ReactElement {
   const [rollbackId, setRollbackId] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [name, setName] = useState('')
+  const [pendingDelete, setPendingDelete] = useState<EnvSnapshot | null>(null)
 
   const load = useCallback(async () => {
     setBusy(true)
@@ -91,7 +93,7 @@ export function SnapshotsPage(): ReactElement {
   }
 
   async function remove(snapshot: EnvSnapshot): Promise<void> {
-    if (!window.confirm(`删除快照「${snapshot.name}」？`)) return
+    setPendingDelete(null)
     setBusy(true)
     try {
       await api.env.deleteSnapshot(snapshot.id)
@@ -137,7 +139,7 @@ export function SnapshotsPage(): ReactElement {
                 <button className="btn small primary" onClick={() => void openDiff(snapshot)} disabled={busy}>
                   查看差异 / 恢复
                 </button>
-                <button className="btn small danger" onClick={() => void remove(snapshot)} disabled={busy}>
+                <button className="btn small danger" onClick={() => setPendingDelete(snapshot)} disabled={busy}>
                   删除
                 </button>
               </div>
@@ -202,6 +204,19 @@ export function SnapshotsPage(): ReactElement {
           <DiffTable entries={diff.entries} />
           <p className="muted">应用前会自动创建回滚点，失败或误操作时可一键撤销。</p>
         </Modal>
+      ) : null}
+
+      {pendingDelete ? (
+        <ConfirmDialog
+          title="删除快照"
+          tone="danger"
+          confirmLabel="删除快照"
+          busy={busy}
+          message={`删除快照「${pendingDelete.name}」？`}
+          detail="只删除这份快照记录，不会改动当前环境变量。"
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => void remove(pendingDelete)}
+        />
       ) : null}
     </div>
   )

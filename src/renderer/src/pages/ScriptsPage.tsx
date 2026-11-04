@@ -9,6 +9,7 @@ import type {
 } from '../../../shared/ipc-types'
 import { api, errorText, formatTime } from '../lib/api'
 import { useToast } from '../components/Toast'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Modal } from '../components/Modal'
 
 interface Draft {
@@ -44,6 +45,7 @@ export function ScriptsPage(): ReactElement {
   const [templates, setTemplates] = useState<ScriptTemplate[]>([])
   const [draft, setDraft] = useState<Draft | null>(null)
   const [busy, setBusy] = useState(false)
+  const [confirmAction, setConfirmAction] = useState<'run' | 'delete' | null>(null)
   const [report, setReport] = useState<DryRunReport | null>(null)
   const [run, setRun] = useState<RunResult | null>(null)
   const [dirty, setDirty] = useState(false)
@@ -130,8 +132,12 @@ export function ScriptsPage(): ReactElement {
       const saved = await save()
       if (!saved) return
     }
-    if (!window.confirm(`执行脚本「${draft.name}」？\n执行前会自动保存一份环境快照。`)) return
+    setConfirmAction('run')
+  }
 
+  async function runConfirmed(): Promise<void> {
+    if (!draft) return
+    setConfirmAction(null)
     setBusy(true)
     setRun(null)
     try {
@@ -149,7 +155,12 @@ export function ScriptsPage(): ReactElement {
 
   async function remove(): Promise<void> {
     if (!draft) return
-    if (!window.confirm(`删除脚本「${draft.name}」？`)) return
+    setConfirmAction('delete')
+  }
+
+  async function removeConfirmed(): Promise<void> {
+    if (!draft) return
+    setConfirmAction(null)
     setBusy(true)
     try {
       await api.scripts.remove(draft.id)
@@ -492,6 +503,25 @@ export function ScriptsPage(): ReactElement {
             </div>
           )}
         </Modal>
+      ) : null}
+
+      {confirmAction ? (
+        <ConfirmDialog
+          title={confirmAction === 'run' ? '执行脚本' : '删除脚本'}
+          tone={confirmAction === 'run' ? 'default' : 'danger'}
+          confirmLabel={confirmAction === 'run' ? '执行' : '删除'}
+          busy={busy}
+          message={
+            confirmAction === 'run' ? `执行脚本「${draft?.name ?? ''}」？` : `删除脚本「${draft?.name ?? ''}」？`
+          }
+          detail={
+            confirmAction === 'run'
+              ? '执行前会自动保存一份环境快照，脚本输出会在下方显示。'
+              : '脚本文件与记录都会被移除，且不可恢复。'
+          }
+          onCancel={() => setConfirmAction(null)}
+          onConfirm={() => (confirmAction === 'run' ? void runConfirmed() : void removeConfirmed())}
+        />
       ) : null}
     </div>
   )

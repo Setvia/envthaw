@@ -3,7 +3,6 @@
 面向学生开发者的、**冰点还原环境下的可持久化开发工作区编排工具**。
 把公共机房电脑变成自己熟悉的开发环境，重启后重新登录即可恢复。
 
-> 实现自《环境管理器（EnvMgr）开发文档（草案）》v0.1 的本地 MVP（P0 + 部分 P1）。
 > 仓库：<https://github.com/Setvia/envthaw>
 
 ![总览](docs/screenshots/dashboard.png)
@@ -22,8 +21,6 @@
 | 审计日志 | ✅ | 所有写操作落 `audit.jsonl`，UI 可查，按用户隔离 |
 | 无边框窗口 | ✅ | 自绘标题栏（拖动 / 双击最大化 / 最小化 / 最大化 / 关闭），布局参考 DSH 桌面端 |
 | 内嵌命令行 | ⬜ | 文档中为 P1，本期未实现 |
-| 云同步 / 账号 | ⬜ | 文档中为付费能力（M6+），本期未实现 |
-| Agent 辅助 | ⬜ | 文档中为付费能力（M8），本期未实现 |
 
 ### 界面
 
@@ -113,8 +110,6 @@ python scripts/make_icon.py   # 需要 Pillow
 会裁掉白底、按原图圆角生成透明边，输出 `resources/icon.ico`（多尺寸）、`resources/icon.png`（1024 透明 PNG）和标题栏用的 `src/renderer/src/assets/icon.png`。electron-builder 的图标由 `build.win.icon` 指向 `resources/icon.ico`，开发态窗口图标也用它。
 
 ### Windows 启动器说明（`scripts/launch.js`）
-
-这台机器上踩到的三个坑，启动器里都做了处理，不必手动干预：
 
 1. **`ELECTRON_RUN_AS_NODE` / `NODE_OPTIONS`** —— 由 IDE 调试终端或 npm 钩子注入，会让 `electron.exe` 变成纯 Node（`require('electron')` 返回字符串），或者预加载调试 bootloader 吞掉主进程日志。启动器对子进程删除这两个变量。
 2. **Chromium 沙箱在特定目录下无法初始化** —— 浏览器进程会在 `app.whenReady()` 之前崩溃（`0xC0000005` / `0x80000003`）。首次启动会把 electron 运行时镜像到 `%LOCALAPPDATA%\EnvThaw\runtime\<version>`，再用目录联接接回 `node_modules/electron/dist`。想跳过：`ENVTHAW_LOCAL_RUNTIME=1 npm run dev`。

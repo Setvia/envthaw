@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactElement } from 're
 import type { EnvVarEntry } from '../../../shared/ipc-types'
 import { api, errorText } from '../lib/api'
 import { useToast } from '../components/Toast'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Modal } from '../components/Modal'
 
 interface EditState {
@@ -18,6 +19,7 @@ export function EnvironmentPage(): ReactElement {
   const [edit, setEdit] = useState<EditState | null>(null)
   const [snapshotOpen, setSnapshotOpen] = useState(false)
   const [snapshotName, setSnapshotName] = useState('')
+  const [pendingRemove, setPendingRemove] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setBusy(true)
@@ -61,7 +63,7 @@ export function EnvironmentPage(): ReactElement {
   }
 
   async function remove(name: string): Promise<void> {
-    if (!window.confirm(`确定删除用户环境变量 ${name}？\n删除前会自动创建回滚点。`)) return
+    setPendingRemove(null)
     setBusy(true)
     try {
       await api.env.remove(name)
@@ -145,7 +147,7 @@ export function EnvironmentPage(): ReactElement {
                         <button className="btn small" onClick={() => setEdit({ mode: 'edit', name: entry.name, value: entry.value })}>
                           编辑
                         </button>
-                        <button className="btn small danger" onClick={() => void remove(entry.name)} disabled={busy}>
+                        <button className="btn small danger" onClick={() => setPendingRemove(entry.name)} disabled={busy}>
                           删除
                         </button>
                       </div>
@@ -227,6 +229,19 @@ export function EnvironmentPage(): ReactElement {
             />
           </div>
         </Modal>
+      ) : null}
+
+      {pendingRemove ? (
+        <ConfirmDialog
+          title="删除环境变量"
+          tone="danger"
+          confirmLabel="删除"
+          busy={busy}
+          message={`确定删除用户环境变量 ${pendingRemove}？`}
+          detail="删除前会自动创建回滚点，可在「快照与恢复」里一键撤销。"
+          onCancel={() => setPendingRemove(null)}
+          onConfirm={() => void remove(pendingRemove)}
+        />
       ) : null}
     </div>
   )

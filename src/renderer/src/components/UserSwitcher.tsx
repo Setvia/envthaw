@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import type { UserProfile } from '../../../shared/ipc-types'
 import { api, errorText } from '../lib/api'
 import { useToast } from '../components/Toast'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Modal } from '../components/Modal'
 
 /**
@@ -16,6 +17,7 @@ export function UserSwitcher(): ReactElement {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -65,7 +67,7 @@ export function UserSwitcher(): ReactElement {
   }
 
   async function remove(target: string): Promise<void> {
-    if (!window.confirm(`删除用户「${target}」？\n该用户目录下的脚本、快照、设置都会被删除，且不可恢复。`)) return
+    setPendingDelete(null)
     setBusy(true)
     try {
       const list = await api.users.remove(target)
@@ -111,7 +113,7 @@ export function UserSwitcher(): ReactElement {
                   </button>
                 )}
                 {user.name !== 'default' ? (
-                  <button className="btn small danger" onClick={() => void remove(user.name)} disabled={busy}>
+                  <button className="btn small danger" onClick={() => setPendingDelete(user.name)} disabled={busy}>
                     删除
                   </button>
                 ) : null}
@@ -137,6 +139,19 @@ export function UserSwitcher(): ReactElement {
             <span className="field-hint">只能包含字母、数字、中文、下划线和短横线。</span>
           </div>
         </Modal>
+      ) : null}
+
+      {pendingDelete ? (
+        <ConfirmDialog
+          title="删除用户"
+          tone="danger"
+          confirmLabel="删除用户"
+          busy={busy}
+          message={`确定删除用户「${pendingDelete}」？`}
+          detail="该用户目录下的脚本、快照、设置都会被删除，且不可恢复。"
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => void remove(pendingDelete)}
+        />
       ) : null}
     </>
   )
