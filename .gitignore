@@ -13,5 +13,8 @@ data/
 # Chromium 开发用 profile
 .electron-profile/
 
+# 本机 IDE 配置
+.vscode/
+
 # 开发文档（草案）包含商业计划，暂不公开
 环境管理器（EnvMgr）开发文档（草案）.docx
