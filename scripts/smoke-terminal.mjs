@@ -130,10 +130,11 @@ check('closing a tab asks for confirmation', confirmClicked === true, String(con
 const afterClose = await evaluate('window.envthaw.terminal.list()')
 check('closing a tab removes the session', !afterClose.some((item) => item.id === second.id), `count=${afterClose.length}`)
 
-// Close the remaining tabs through the UI so renderer and main stay in sync.
-for (let guard = 0; guard < 10; guard += 1) {
-  const openTabs = await evaluate('document.querySelectorAll(\'.term-tab\').length')
-  if (!openTabs) break
+// Leave exactly one tab open: closing the last one auto-creates a replacement,
+// so the loop must stop at 1 instead of chasing zero.
+for (let guard = 0; guard < 8; guard += 1) {
+  const openTabs = await evaluate("document.querySelectorAll('.term-tab').length")
+  if (openTabs <= 1) break
   await evaluate(`document.querySelector('.term-tab .term-tab-close')?.click()`)
   await sleep(300)
   await evaluate(`document.querySelector('.modal-footer .btn.danger')?.click()`)

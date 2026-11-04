@@ -110,11 +110,21 @@ export function TerminalPage(): ReactElement {
     setClosing(null)
     try {
       await api.terminal.close(session.id)
-      const list = await api.terminal.list()
+      let list = await api.terminal.list()
+      // Never leave the page in a dead "no terminal" state: closing the last tab
+      // immediately opens a fresh one.
+      if (list.length === 0) {
+        const created = await api.terminal.create()
+        list = [created]
+        setBuffers((current) => ({ ...current, [created.id]: '' }))
+        setRunning((current) => ({ ...current, [created.id]: false }))
+        const buffer = await api.terminal.buffer(created.id)
+        setBuffers((current) => ({ ...current, [created.id]: buffer }))
+      }
       setSessions(list)
       setBuffers((current) => {
         const next = { ...current }
-        delete next[session.id]
+        if (!list.some((item) => item.id === session.id)) delete next[session.id]
         return next
       })
       setActiveId((current) => (current === session.id ? (list[0]?.id ?? null) : current))
