@@ -26,7 +26,7 @@ const PAGES: PageMeta[] = [
   { id: 'env', label: '环境变量', icon: '⌘', title: '环境变量', desc: '管理当前用户的 HKCU\\Environment' },
   { id: 'redirect', label: '路径重定向', icon: '⇄', title: '路径重定向', desc: '把 Python / Node / Git 的目录收进项目内' },
   { id: 'scripts', label: '脚本库', icon: '⌨', title: '脚本库', desc: '保存常用脚本，执行前先 dry-run' },
-  { id: 'terminal', label: '命令行', icon: '▮', title: '命令行', desc: '内嵌多标签命令行，每个标签独立工作目录' },
+  { id: 'terminal', label: '命令行', icon: '🖥', title: '命令行', desc: '内嵌多标签命令行，每个标签独立工作目录' },
   { id: 'snapshots', label: '快照与恢复', icon: '⧉', title: '快照与恢复', desc: '对比差异，只改需要改的变量' },
   { id: 'settings', label: '设置', icon: '⚙', title: '设置', desc: '配置目录、更新源与配置包' },
   { id: 'audit', label: '操作日志', icon: '☰', title: '操作日志', desc: '所有写操作的审计记录' }
@@ -74,7 +74,7 @@ function App(): ReactElement {
             </div>
           </header>
 
-          <main className="content">
+          <main className={`content${page === 'terminal' ? ' no-scroll' : ''}`}>
             {page === 'dashboard' ? <Dashboard onNavigate={(next) => setPage(next as PageId)} /> : null}
             {page === 'env' ? <EnvironmentPage /> : null}
             {page === 'redirect' ? <RedirectPage /> : null}

@@ -284,8 +284,7 @@ export function TerminalPage(): ReactElement {
         >
           <span className="term-prompt" title={active?.cwd}>
             PS {active ? shortenPath(active.cwd) : ''}&gt;
-          </span>
-          <input
+          </span>          <input
             ref={inputRef}
             className="term-input"
             value={input}
@@ -323,7 +322,8 @@ export function TerminalPage(): ReactElement {
   )
 }
 
+/** Prompt shows only the trailing folder; the full cwd is in the tooltip. */
 function shortenPath(value: string): string {
-  if (value.length <= 42) return value
-  return `…${value.slice(value.length - 41)}`
+  const parts = value.split(/[\\/]+/).filter(Boolean)
+  return parts.length > 1 ? parts[parts.length - 1] : value
 }

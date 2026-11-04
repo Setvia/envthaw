@@ -1183,39 +1183,54 @@ img.brand-mark.tiny {
 
 
 /* ---------- terminal ---------- */
+.content.no-scroll {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 18px;
+}
+
 .term-page {
-  height: calc(100vh - 126px);
-  min-height: 360px;
-  gap: 10px;
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  gap: 8px;
 }
 
 .term-toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  min-height: 24px;
 }
 
 .term-tabs {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex: 1;
   overflow-x: auto;
-  padding-bottom: 2px;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.term-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .term-tab {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 6px 6px 10px;
-  border-radius: 8px;
+  gap: 5px;
+  padding: 2px 3px 2px 7px;
+  border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--panel);
   color: var(--text-soft);
-  font-size: 12.5px;
+  font-size: 11.5px;
+  line-height: 18px;
   cursor: pointer;
-  max-width: 220px;
+  max-width: 170px;
   user-select: none;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
@@ -1231,9 +1246,9 @@ img.brand-mark.tiny {
 }
 
 .term-dot {
-  flex: 0 0 6px;
-  width: 6px;
-  height: 6px;
+  flex: 0 0 5px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: var(--green);
 }
@@ -1256,11 +1271,11 @@ img.brand-mark.tiny {
 }
 
 .term-tab-input {
-  width: 120px;
+  width: 104px;
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 2px 5px;
-  font-size: 12px;
+  border-radius: 5px;
+  padding: 1px 4px;
+  font-size: 11.5px;
   background: #ffffff;
 }
 
@@ -1269,10 +1284,10 @@ img.brand-mark.tiny {
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
-  font-size: 15px;
+  font-size: 13px;
   line-height: 1;
-  padding: 1px 3px;
-  border-radius: 4px;
+  padding: 0 1px;
+  border-radius: 3px;
 }
 
 .term-tab-close:hover {
@@ -1281,14 +1296,14 @@ img.brand-mark.tiny {
 }
 
 .term-new {
-  flex: 0 0 28px;
-  width: 28px;
-  height: 28px;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
   border: 1px dashed var(--border-strong);
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--text-soft);
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1;
   cursor: pointer;
 }
@@ -1301,7 +1316,13 @@ img.brand-mark.tiny {
 .term-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+}
+
+.term-actions .badge {
+  height: 20px;
+  padding: 0 8px;
+  font-size: 11px;
 }
 
 .term-body {
@@ -1344,7 +1365,7 @@ img.brand-mark.tiny {
   font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace;
   font-size: 12.5px;
   white-space: nowrap;
-  max-width: 46%;
+  max-width: 34%;
   overflow: hidden;
   text-overflow: ellipsis;
 }
