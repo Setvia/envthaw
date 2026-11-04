@@ -6,6 +6,7 @@ import { IPC, type TerminalExitEvent, type TerminalSessionInfo } from '../../sha
 import { projectRoot } from './paths'
 import { shellEnv } from './script-runner'
 import { newId } from './storage'
+import { consoleEncoding, createDecoder } from '../utils/encoding'
 
 /** Keep at most this much scrollback per tab (oldest output is dropped). */
 const MAX_BUFFER_CHARS = 400_000
@@ -70,6 +71,7 @@ function finish(session: Session, code: number | null, timedOut: boolean): void 
   const durationMs = Date.now() - session.startedAt
   if (session.timer) clearTimeout(session.timer)
   session.timer = null
+  session.child?.stdin?.end()
   session.child = null
 
   const seconds = (durationMs / 1000).toFixed(durationMs < 10_000 ? 2 : 1)
@@ -131,6 +133,22 @@ export function readBuffer(id: string): string {
   return getSession(id).buffer
 }
 
+/** Sends typed text to the running command's stdin (pause / Read-Host / choice...). */
+export function writeInput(id: string, data: string): void {
+  const session = getSession(id)
+  const stdin = session.child?.stdin
+  if (!stdin || stdin.destroyed) throw new Error('当前没有正在运行的命令可以接收输入')
+  stdin.write(data)
+}
+
+/** Closes stdin so commands that read until EOF (more, sort, findstr) can finish. */
+export function closeInput(id: string): void {
+  const session = getSession(id)
+  if (!session.child?.stdin) return
+  session.child.stdin.end()
+  append(session, '\n[已关闭标准输入]\n')
+}
+
 /** Builtins that must not spawn a process. Returns true when handled. */
 function runBuiltin(session: Session, command: string): boolean {
   const trimmed = command.trim()
@@ -187,8 +205,9 @@ export async function runCommand(id: string, rawCommand: string): Promise<void> 
           '-ExecutionPolicy',
           'Bypass',
           '-Command',
-          // Force UTF-8 both ways so Chinese output and child tools decode correctly.
-          `[Console]::OutputEncoding=[Text.Encoding]::UTF8; $OutputEncoding=[Text.Encoding]::UTF8; ${command}`
+          // Leave the console encoding alone: PowerShell then writes in the same
+          // code page as the native tools it runs, so one decoder handles both.
+          command
         ],
         { cwd: session.cwd, env, windowsHide: true }
       )
@@ -197,7 +216,8 @@ export async function runCommand(id: string, rawCommand: string): Promise<void> 
   session.child = child
   session.startedAt = Date.now()
 
-  const stream = (chunk: Buffer): void => append(session, chunk.toString('utf8'))
+  const decoder = createDecoder(consoleEncoding())
+  const stream = (chunk: Buffer): void => append(session, decoder.push(chunk))
   child.stdout?.on('data', stream)
   child.stderr?.on('data', stream)
 
@@ -214,7 +234,11 @@ export async function runCommand(id: string, rawCommand: string): Promise<void> 
     finishOnce(null)
   })
 
-  child.on('close', (code) => finishOnce(code))
+  child.on('close', (code) => {
+    const rest = decoder.flush()
+    if (rest) append(session, rest)
+    finishOnce(code)
+  })
 
   session.timer = setTimeout(() => {
     if (!session.child) return

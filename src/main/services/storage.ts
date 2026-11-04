@@ -11,6 +11,7 @@ import type {
   UserProfile
 } from '../../shared/ipc-types'
 import { DEFAULT_USER, configDir, dataDir, expandDeep, presetsDir, sessionFile, userDir } from './paths'
+import { decodeText } from '../utils/encoding'
 
 export interface StorageLayout {
   /** config/ */
@@ -299,7 +300,9 @@ export function writeScriptRecords(records: ScriptRecord[]): void {
 
 export function readScriptFile(file: string): string {
   try {
-    return fs.readFileSync(path.join(scriptsDir(), file), 'utf8')
+    // Imported .bat files are often GBK/ANSI on Chinese Windows; decodeText picks
+    // UTF-8 when valid and the console code page otherwise.
+    return decodeText(fs.readFileSync(path.join(scriptsDir(), file)))
   } catch {
     return ''
   }

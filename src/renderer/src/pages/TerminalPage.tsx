@@ -29,6 +29,21 @@ export function TerminalPage(): ReactElement {
   const active = useMemo(() => sessions.find((item) => item.id === activeId) ?? null, [sessions, activeId])
   activeIdRef.current = activeId
 
+  // Ctrl+C must work even when focus is outside the input (e.g. the user clicked
+  // the output pane). Capture phase so it beats any input-level handler; the
+  // main process ignores it when nothing is running.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (!event.ctrlKey || event.key.toLowerCase() !== 'c') return
+      const id = activeIdRef.current
+      if (!id) return
+      event.preventDefault()
+      void api.terminal.stop(id).catch(() => {})
+    }
+    document.addEventListener('keydown', onKeyDown, true)
+    return () => document.removeEventListener('keydown', onKeyDown, true)
+  }, [])
+
   const scrollToBottom = useCallback(() => {
     const node = outputRef.current
     if (node && stickToBottom.current) node.scrollTop = node.scrollHeight
@@ -57,7 +72,13 @@ export function TerminalPage(): ReactElement {
     }
   }, [loadBuffers, toast])
 
+  // React StrictMode double-invokes effects in dev; without this guard the
+  // first mount would create two tabs (list() returns empty for both calls).
+  const bootstrapped = useRef(false)
+
   useEffect(() => {
+    if (bootstrapped.current) return
+    bootstrapped.current = true
     void bootstrap()
   }, [bootstrap])
 
@@ -134,16 +155,40 @@ export function TerminalPage(): ReactElement {
   }
 
   async function submit(): Promise<void> {
+    if (!activeId) return
+
+    // Ask the main process whether this tab is busy instead of trusting React
+    // state: a command may have been started elsewhere, and a stale `running`
+    // flag would otherwise try to start a second command and get rejected.
+    const busy =
+      (await api.terminal
+        .list()
+        .then((list) => list.find((session) => session.id === activeId)?.running)
+        .catch(() => false)) ?? running[activeId]
+
+    // A command is waiting for input (pause / Read-Host / choice): send the line
+    // to its stdin instead of starting a new command. Empty Enter still counts.
+    if (busy) {
+      const line = input
+      setInput('')
+      try {
+        await api.terminal.write(activeId, `${line}\r\n`)
+      } catch (error) {
+        toast('error', errorText(error))
+      }
+      return
+    }
+
     const command = input.trim()
-    if (!command || !activeId) return
+    if (!command) return
     setInput('')
     setHistoryIndex(-1)
     setHistory((current) => {
       const list = current[activeId] ?? []
       return { ...current, [activeId]: [...list.filter((item) => item !== command), command].slice(-100) }
     })
-    setRunning((current) => ({ ...current, [activeId]: true }))
     stickToBottom.current = true
+    setRunning((current) => ({ ...current, [activeId]: true }))
     try {
       await api.terminal.run(activeId, command)
     } catch (error) {
@@ -199,10 +244,11 @@ export function TerminalPage(): ReactElement {
       }
       return
     }
-    if (event.key === 'c' && event.ctrlKey) {
-      if (running[activeId]) {
+    if (event.key.toLowerCase() === 'd' && event.ctrlKey) {
+      if (activeId) {
         event.preventDefault()
-        void stop()
+        // No-op in the main process when nothing is running.
+        void api.terminal.closeInput(activeId).catch(() => {})
       }
       return
     }
@@ -256,10 +302,11 @@ export function TerminalPage(): ReactElement {
               </button>
             </div>
           ))}
-          <button className="term-new" onClick={() => void createTab()} title="新建标签页">
-            +
-          </button>
         </div>
+
+        <button className="term-new" onClick={() => void createTab()} title="新建标签页">
+          +
+        </button>
 
         <div className="term-actions">
           <span className={`badge ${isRunning ? 'blue' : 'green'}`}>{isRunning ? '执行中' : '就绪'}</span>
@@ -294,21 +341,31 @@ export function TerminalPage(): ReactElement {
         >
           <span className="term-prompt" title={active?.cwd}>
             PS {active ? shortenPath(active.cwd) : ''}&gt;
-          </span>          <input
+          </span>
+          <input
             ref={inputRef}
             className="term-input"
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={onInputKeyDown}
-            placeholder={isRunning ? '命令执行中，Ctrl+C 可停止' : '输入命令，Enter 执行；↑↓ 翻历史，Ctrl+L 清屏'}
+            placeholder={
+              isRunning
+                ? '输入内容回车发送给进程 · Ctrl+D 结束输入 · Ctrl+C 终止'
+                : '输入命令，Enter 执行；↑↓ 翻历史，Ctrl+L 清屏'
+            }
             spellCheck={false}
             autoComplete="off"
             disabled={!activeId}
           />
           {isRunning ? (
-            <button type="button" className="btn small danger" onClick={() => void stop()}>
-              停止
-            </button>
+            <>
+              <button type="submit" className="btn small primary" title="把输入发送给正在运行的命令">
+                发送
+              </button>
+              <button type="button" className="btn small danger" onClick={() => void stop()} title="终止当前命令">
+                停止
+              </button>
+            </>
           ) : (
             <button type="submit" className="btn small primary" disabled={!input.trim()}>
               执行

@@ -3,18 +3,21 @@ import { z } from 'zod'
 import { IPC } from '../../shared/ipc-types'
 import {
   clearSession,
+  closeInput,
   closeSession,
   createSession,
   listSessions,
   readBuffer,
   renameSession,
   runCommand,
-  stopSession
+  stopSession,
+  writeInput
 } from '../services/terminal-service'
 
 const idSchema = z.string().min(3).max(80)
 const commandSchema = z.string().min(1).max(8000)
 const titleSchema = z.string().min(1).max(40)
+const inputSchema = z.string().max(4096)
 
 export function registerTerminalHandlers(): void {
   ipcMain.handle(IPC.terminalList, () => listSessions())
@@ -30,6 +33,12 @@ export function registerTerminalHandlers(): void {
   )
   ipcMain.handle(IPC.terminalStop, (_event, id: unknown) => {
     stopSession(idSchema.parse(id))
+  })
+  ipcMain.handle(IPC.terminalWrite, (_event, id: unknown, data: unknown) => {
+    writeInput(idSchema.parse(id), inputSchema.parse(data))
+  })
+  ipcMain.handle(IPC.terminalCloseInput, (_event, id: unknown) => {
+    closeInput(idSchema.parse(id))
   })
   ipcMain.handle(IPC.terminalClear, (_event, id: unknown) => {
     clearSession(idSchema.parse(id))

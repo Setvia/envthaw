@@ -15,7 +15,9 @@
     "smoke:functional": "node scripts/smoke-functional.mjs 9223",
     "smoke:update": "node scripts/smoke-update.mjs 9223",
     "smoke:users": "node scripts/smoke-users.mjs 9223",
-    "smoke:cloud": "node scripts/smoke-cloud.mjs 9223","smoke:terminal": "node scripts/smoke-terminal.mjs 9223",
+    "smoke:cloud": "node scripts/smoke-cloud.mjs 9223",
+    "smoke:terminal": "node scripts/smoke-terminal.mjs 9223",
+    "smoke:terminal:stdin": "node scripts/smoke-terminal-stdin.mjs 9223",
     "package": "electron-vite build && electron-builder --win portable",
     "prepare": "node scripts/install-hooks.mjs"
   },

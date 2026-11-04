@@ -64,7 +64,7 @@ textarea {
 
 /* ---------- in-page title bar (frameless window) ---------- */
 .titlebar {
-  height: 38px;
+  height: 32px;
   flex: 0 0 38px;
   display: flex;
   align-items: center;
@@ -222,10 +222,9 @@ textarea {
 }
 
 .topbar {
-  height: 62px;
-  flex: 0 0 62px;
+  height: 50px;
+  flex: 0 0 50px;
   background: var(--panel);
-  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   gap: 14px;
@@ -384,9 +383,32 @@ textarea {
 }
 
 .btn.small {
-  height: 28px;
-  padding: 0 10px;
-  font-size: 12px;
+  height: 27px;
+  padding: 12px 10px 10px 10px;
+  gap: 5px;
+  border-radius: 0px;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--text-soft);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn.small.primary {
+  color: #fff;
+}
+
+.btn.small.danger {
+  color: var(--red);
+}
+
+.btn.small.ghost {
+  color: var(--text-soft);
+}
+
+.btn.small:not(:disabled):active {
+  transform: translateY(1px);
 }
 
 /* ---------- inputs ---------- */
@@ -777,15 +799,29 @@ table.table {
 
 .split {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: clamp(170px, 24%, 280px) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
+}
+
+/* Narrow windows: the list moves above the editor instead of squeezing both. */
+@media (max-width: 1020px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .list {
+    max-height: 208px;
+    overflow-y: auto;
+    padding-right: 2px;
+  }
 }
 
 .list {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
 }
 
 .list-item {
@@ -798,6 +834,9 @@ table.table {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .list-item:hover {
@@ -807,6 +846,15 @@ table.table {
 .list-item.active {
   border-color: var(--accent);
   background: var(--accent-soft);
+}
+
+.list-item-title,
+.list-item-sub {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .list-item-title {
@@ -829,6 +877,7 @@ table.table {
   display: flex;
   gap: 10px;
   align-items: center;
+  overflow: hidden;
 }
 
 .row.wrap {
@@ -1187,28 +1236,31 @@ img.brand-mark.tiny {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  padding: 14px 20px 12px;
+  padding: 0px 0px 0px;
 }
 
 .term-page {
   flex: 1;
   min-height: 0;
   height: auto;
-  gap: 6px;
+  gap: 0px;
 }
 
 .term-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0px;
   min-height: 22px;
 }
 
 .term-tabs {
   display: flex;
+  position: relative;
   align-items: center;
-  gap: 4px;
-  flex: 1;
+  height: 100%;
+  gap: 0px;
+  flex: 0 1 auto;
+  max-width: min(62%, 760px);
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
@@ -1221,16 +1273,19 @@ img.brand-mark.tiny {
 .term-tab {
   display: flex;
   align-items: center;
+  height: 100%;
   gap: 4px;
   padding: 1px 3px 1px 6px;
-  border-radius: 5px;
+  border-radius: 0px;
   border: 1px solid var(--border);
   background: var(--panel);
   color: var(--text-soft);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 16px;
   cursor: pointer;
-  max-width: 160px;
+  max-width: 200px;
+  min-width: 100px;
+  flex: 0 0 auto;
   user-select: none;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
@@ -1265,6 +1320,8 @@ img.brand-mark.tiny {
 }
 
 .term-tab-title {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1280,14 +1337,16 @@ img.brand-mark.tiny {
 }
 
 .term-tab-close {
+  height: 20px;
+  width: 20px;
   border: 0;
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
-  font-size: 13px;
-  line-height: 1;
-  padding: 0 1px;
-  border-radius: 3px;
+  font-size: 24px;
+  line-height: 0;
+  padding: 0px 3px 6px 2px;
+  border-radius: 50%;
 }
 
 .term-tab-close:hover {
@@ -1296,15 +1355,17 @@ img.brand-mark.tiny {
 }
 
 .term-new {
-  flex: 0 0 20px;
-  width: 20px;
-  height: 20px;
+  flex: 0 0 28px;
+  max-width: 24px;
+  height: 24px;
+  margin-left: 2px;
+  padding: 4px 0px 10px 0px;
   border: 1px dashed var(--border-strong);
   border-radius: 5px;
   background: transparent;
   color: var(--text-soft);
-  font-size: 13px;
-  line-height: 1;
+  font-size: 26px;
+  line-height: 0;
   cursor: pointer;
 }
 
@@ -1317,12 +1378,13 @@ img.brand-mark.tiny {
   display: flex;
   align-items: center;
   gap: 6px;
+  margin-left: auto;
 }
 
 .term-actions .badge {
   height: 18px;
   padding: 0 7px;
-  font-size: 10.5px;
+  font-size: 14px;
 }
 
 .term-body {
@@ -1330,9 +1392,9 @@ img.brand-mark.tiny {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: #0f1729;
+  background: #070f21;
   border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 12px;
+  border-radius: 0px;
   overflow: hidden;
   box-shadow: 0 12px 32px rgba(15, 23, 41, 0.18);
 }

@@ -291,7 +291,7 @@ export function ScriptsPage(): ReactElement {
         </div>
       ) : null}
 
-      <div className="split" style={{ gridTemplateColumns: '270px minmax(0, 1fr)' }}>
+      <div className="split">
         <div className="list">
           {scripts.length === 0 ? (
             <div className="card">
@@ -321,10 +321,10 @@ export function ScriptsPage(): ReactElement {
           {draft ? (
             <>
               <div className="card stack" style={{ gap: 14 }}>
-                <div className="row">
+                <div className="row wrap">
                   <input
                     className="input"
-                    style={{ maxWidth: 360 }}
+                    style={{ flex: '1 1 200px', maxWidth: 360, minWidth: 0 }}
                     value={draft.name}
                     onChange={(event) => patch({ name: event.target.value })}
                     placeholder="脚本名称"

@@ -91,11 +91,15 @@ src/
 
 ```bash
 npm install
-npm run dev      # electron-vite dev（HMR）
-npm start        # 构建后以生产模式启动
+npm run dev      # electron-vite dev：Vite HMR，改 renderer 的 .tsx / styles.css 即时生效
+npm start        # 构建后以生产模式启动（无热重载，改样式要重新 build + 重启）
 npm run build    # 只构建
 npm run typecheck
 ```
+
+**样式热重载**：`npm run dev` 下修改 `src/renderer/src/styles.css` 会通过 Vite 的 CSS HMR 直接注入，
+不会刷新页面、不会丢终端内容；修改 `src/renderer/**/*.tsx` 走 React Fast Refresh，组件状态保留。
+`npm start` 跑的是 `out/` 里的生产构建，任何改动都必须重新构建并重启，仅用于验收。
 
 `F12` / `Ctrl+Shift+I` 打开的是**独立窗口**的 DevTools（`mode: 'detach'`），不会挤占应用窗口布局，仍在同一个进程内。
 

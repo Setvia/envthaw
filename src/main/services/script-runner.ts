@@ -12,6 +12,7 @@ import type {
 } from '../../shared/ipc-types'
 import { mergeEnv, readMachinePath, readUserEnv, toEnvRecord } from '../utils/registry'
 import { audit } from './env-service'
+import { consoleEncoding, createDecoder, decodeText } from '../utils/encoding'
 import {
   deleteScriptFile,
   ensureLayout,
@@ -190,9 +191,14 @@ function writeTempScript(script: ScriptEntry): string {
   const dir = path.join(layout.root, 'tmp')
   fs.mkdirSync(dir, { recursive: true })
   const file = path.join(dir, `${script.id}-${Date.now()}${scriptExtension(script.type)}`)
+  if (script.type === 'batch') {
+    // cmd reads a .bat using the current code page; switching to UTF-8 first keeps
+    // Chinese in the file readable and matches how we decode the output.
+    fs.writeFileSync(file, `@chcp 65001 >nul\r\n${script.content}\r\n`, 'utf8')
+    return file
+  }
   // PowerShell 5.1 decodes .ps1 without BOM as ANSI, so Chinese content needs the BOM.
-  const bom = script.type === 'powershell' ? '\uFEFF' : ''
-  fs.writeFileSync(file, `${bom}${script.content}\r\n`, 'utf8')
+  fs.writeFileSync(file, `\uFEFF${script.content}\r\n`, 'utf8')
   return file
 }
 
@@ -212,12 +218,28 @@ export async function shellEnv(): Promise<NodeJS.ProcessEnv> {
   return merged
 }
 
-function spawnAndCollect(command: string, args: string[], env: NodeJS.ProcessEnv): Promise<RunResult> {
+function spawnAndCollect(
+  command: string,
+  args: string[],
+  env: NodeJS.ProcessEnv,
+  encoding: string
+): Promise<RunResult> {
   return new Promise((resolve) => {
     const startedAt = Date.now()
-    const child = spawn(command, args, { env, windowsHide: true, cwd: process.env.USERPROFILE })
-    const stdout: Buffer[] = []
-    const stderr: Buffer[] = []
+    // Scripts are non-interactive: give them no stdin so a `pause` inside a .bat
+    // sees EOF and returns instead of blocking until the timeout.
+    const child = spawn(command, args, {
+      env,
+      windowsHide: true,
+      cwd: process.env.USERPROFILE,
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+    // cmd.exe speaks the console code page (GBK on zh-CN); our PowerShell wrapper
+    // forces UTF-8. Decode per source instead of assuming one encoding.
+    const outDecoder = createDecoder(encoding)
+    const errDecoder = createDecoder(encoding)
+    const stdout: string[] = []
+    const stderr: string[] = []
     let timedOut = false
 
     const timer = setTimeout(() => {
@@ -230,15 +252,21 @@ function spawnAndCollect(command: string, args: string[], env: NodeJS.ProcessEnv
       }
     }, RUN_TIMEOUT_MS)
 
-    child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk))
-    child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk))
+    child.stdout.on('data', (chunk: Buffer) => stdout.push(outDecoder.push(chunk)))
+    child.stderr.on('data', (chunk: Buffer) => stderr.push(errDecoder.push(chunk)))
+
+    const collect = (): { out: string; err: string } => ({
+      out: stdout.join('') + outDecoder.flush(),
+      err: stderr.join('') + errDecoder.flush()
+    })
 
     const finish = (code: number | null): void => {
       clearTimeout(timer)
+      const { out, err } = collect()
       resolve({
         exitCode: code ?? -1,
-        stdout: Buffer.concat(stdout).toString('utf8'),
-        stderr: Buffer.concat(stderr).toString('utf8'),
+        stdout: out,
+        stderr: err,
         durationMs: Date.now() - startedAt,
         timedOut
       })
@@ -246,10 +274,11 @@ function spawnAndCollect(command: string, args: string[], env: NodeJS.ProcessEnv
 
     child.on('error', (error) => {
       clearTimeout(timer)
+      const { out, err } = collect()
       resolve({
         exitCode: -1,
-        stdout: Buffer.concat(stdout).toString('utf8'),
-        stderr: `${Buffer.concat(stderr).toString('utf8')}\n${error.message}`,
+        stdout: out,
+        stderr: `${err}\n${error.message}`,
         durationMs: Date.now() - startedAt,
         timedOut: false
       })
@@ -277,7 +306,10 @@ export async function runScript(script: ScriptEntry): Promise<RunResult> {
 
   const result =
     script.type === 'batch'
-      ? await spawnAndCollect('cmd.exe', ['/d', '/s', '/c', `"${file}"`], env)
+      ? // No manual quoting: Node quotes the path when it contains spaces, and
+        // `cmd /s` strips that outer pair. Adding quotes here would be escaped
+        // into literal \" and cmd would fail to find the file.
+        await spawnAndCollect('cmd.exe', ['/d', '/s', '/c', file], env, 'utf-8')
       : await spawnAndCollect(
           'powershell.exe',
           [
@@ -289,7 +321,8 @@ export async function runScript(script: ScriptEntry): Promise<RunResult> {
             '-Command',
             `[Console]::OutputEncoding=[Text.Encoding]::UTF8; & '${file.replace(/'/g, "''")}'`
           ],
-          env
+          env,
+          'utf-8'
         )
 
   const records = readScriptRecords()
@@ -396,7 +429,8 @@ export function importScripts(paths: string[]): ScriptImportResult {
         createdAt: Date.now()
       }
       records.push(record)
-      added.push({ ...record, content: fs.readFileSync(path.join(scriptsDir(), targetName), 'utf8') })
+      const imported = fs.readFileSync(path.join(scriptsDir(), targetName))
+      added.push({ ...record, content: decodeText(imported) })
 
       if (type === 'other') {
         warnings.push({

@@ -385,6 +385,10 @@ export interface EnvThawApi {
     rename(id: string, title: string): Promise<void>
     run(id: string, command: string): Promise<void>
     stop(id: string): Promise<void>
+    /** Send text to the running command's stdin (pause / Read-Host ...). */
+    write(id: string, data: string): Promise<void>
+    /** Close stdin (EOF) so readers like `more` can finish. */
+    closeInput(id: string): Promise<void>
     clear(id: string): Promise<void>
     buffer(id: string): Promise<string>
     onData(callback: (event: TerminalDataEvent) => void): () => void
@@ -457,6 +461,8 @@ export const IPC = {
   terminalRename: 'terminal:rename',
   terminalRun: 'terminal:run',
   terminalStop: 'terminal:stop',
+  terminalWrite: 'terminal:write',
+  terminalCloseInput: 'terminal:close-input',
   terminalClear: 'terminal:clear',
   terminalBuffer: 'terminal:buffer',
   terminalData: 'terminal:data',
