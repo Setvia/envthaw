@@ -24,7 +24,3 @@ export function runPowerShell(script: string, timeout = 30_000): Promise<string>
 }
 
 export const PS_PREAMBLE = "[Console]::OutputEncoding=[Text.Encoding]::UTF8; $ErrorActionPreference='Stop'; "
-
-export function toPowerShellString(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`
-}

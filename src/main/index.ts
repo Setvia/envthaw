@@ -11,6 +11,7 @@ import { registerUserHandlers } from './ipc/users'
 import { registerWindowHandlers, wireWindowState } from './ipc/window'
 import { registerCloudHandlers } from './ipc/cloud'
 import { registerTerminalHandlers } from './ipc/terminal'
+import { disposeAllSessions } from './services/terminal-service'
 import { configDir } from './services/paths'
 
 // Chromium's profile lives under %APPDATA% by default, which is exactly the disk
@@ -129,6 +130,11 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
+})
+
+// ConPTY hosts keep running if we don't take them down explicitly.
+app.on('will-quit', () => {
+  disposeAllSessions()
 })
 
 process.on('uncaughtException', (error) => {

@@ -1,81 +1,50 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
+import { FitAddon } from '@xterm/addon-fit'
+import { Terminal } from '@xterm/xterm'
+import '@xterm/xterm/css/xterm.css'
 import type { TerminalSessionInfo } from '../../../shared/ipc-types'
 import { api, errorText } from '../lib/api'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 
 /**
- * Tabbed embedded console. Each tab is an independent session in the main
- * process (its own cwd, scrollback and running child), so switching tabs never
- * loses output and one tab can keep working while another runs a command.
+ * Tabbed terminal built the way VS Code does it: xterm.js in the renderer and a
+ * real ConPTY (node-pty) in the main process. Keystrokes go straight to the
+ * shell, so PowerShell prompts, colours, tab-completion and Ctrl+C are native.
  */
 export function TerminalPage(): ReactElement {
   const toast = useToast()
   const [sessions, setSessions] = useState<TerminalSessionInfo[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [buffers, setBuffers] = useState<Record<string, string>>({})
   const [running, setRunning] = useState<Record<string, boolean>>({})
-  const [input, setInput] = useState('')
-  const [history, setHistory] = useState<Record<string, string[]>>({})
-  const [historyIndex, setHistoryIndex] = useState(-1)
   const [closing, setClosing] = useState<TerminalSessionInfo | null>(null)
   const [editing, setEditing] = useState<{ id: string; title: string } | null>(null)
 
-  const outputRef = useRef<HTMLPreElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const stickToBottom = useRef(true)
-  const activeIdRef = useRef<string | null>(null)
+  const hostRef = useRef<HTMLDivElement>(null)
+  const termRef = useRef<Terminal | null>(null)
+  const activeRef = useRef<string | null>(null)
+  activeRef.current = activeId
 
-  const active = useMemo(() => sessions.find((item) => item.id === activeId) ?? null, [sessions, activeId])
-  activeIdRef.current = activeId
-
-  // Ctrl+C must work even when focus is outside the input (e.g. the user clicked
-  // the output pane). Capture phase so it beats any input-level handler; the
-  // main process ignores it when nothing is running.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (!event.ctrlKey || event.key.toLowerCase() !== 'c') return
-      const id = activeIdRef.current
-      if (!id) return
-      event.preventDefault()
-      void api.terminal.stop(id).catch(() => {})
-    }
-    document.addEventListener('keydown', onKeyDown, true)
-    return () => document.removeEventListener('keydown', onKeyDown, true)
-  }, [])
-
-  const scrollToBottom = useCallback(() => {
-    const node = outputRef.current
-    if (node && stickToBottom.current) node.scrollTop = node.scrollHeight
-  }, [])
-
-  const loadBuffers = useCallback(async (list: TerminalSessionInfo[]) => {
-    const entries = await Promise.all(
-      list.map(async (session) => [session.id, await api.terminal.buffer(session.id)] as const)
-    )
-    setBuffers(Object.fromEntries(entries))
+  const applyList = useCallback((list: TerminalSessionInfo[]): void => {
+    setSessions(list)
     setRunning(Object.fromEntries(list.map((session) => [session.id, session.running])))
+    setActiveId((current) => (current && list.some((item) => item.id === current) ? current : list[0]?.id ?? null))
   }, [])
 
   const bootstrap = useCallback(async () => {
     try {
       let list = await api.terminal.list()
       if (list.length === 0) {
-        const created = await api.terminal.create()
-        list = [created]
+        await api.terminal.create()
+        list = await api.terminal.list()
       }
-      setSessions(list)
-      setActiveId((current) => (current && list.some((item) => item.id === current) ? current : list[0].id))
-      await loadBuffers(list)
+      applyList(list)
     } catch (error) {
       toast('error', errorText(error))
     }
-  }, [loadBuffers, toast])
+  }, [applyList, toast])
 
-  // React StrictMode double-invokes effects in dev; without this guard the
-  // first mount would create two tabs (list() returns empty for both calls).
   const bootstrapped = useRef(false)
-
   useEffect(() => {
     if (bootstrapped.current) return
     bootstrapped.current = true
@@ -84,44 +53,107 @@ export function TerminalPage(): ReactElement {
 
   useEffect(() => {
     const offData = api.terminal.onData(({ id, chunk }) => {
-      setBuffers((current) => ({ ...current, [id]: ((current[id] ?? '') + chunk).slice(-400_000) }))
-      if (id === activeIdRef.current) requestAnimationFrame(scrollToBottom)
+      if (id === activeRef.current) termRef.current?.write(chunk)
     })
     const offExit = api.terminal.onExit(({ id }) => {
       setRunning((current) => ({ ...current, [id]: false }))
-      if (id === activeIdRef.current) requestAnimationFrame(scrollToBottom)
-    })
-    const offCwd = api.terminal.onCwd(({ id, cwd }) => {
-      setSessions((current) => current.map((session) => (session.id === id ? { ...session, cwd } : session)))
     })
     const offCleared = api.terminal.onCleared(({ id }) => {
-      setBuffers((current) => ({ ...current, [id]: '' }))
+      if (id !== activeRef.current) return
+      termRef.current?.clear()
+      termRef.current?.write('\x1b[2J\x1b[H')
     })
     return () => {
       offData()
       offExit()
-      offCwd()
       offCleared()
     }
-  }, [scrollToBottom])
+  }, [])
 
+  // One xterm instance per active tab; switching tabs replays the main-process
+  // scrollback so nothing is lost.
   useEffect(() => {
-    stickToBottom.current = true
-    requestAnimationFrame(() => {
-      scrollToBottom()
-      inputRef.current?.focus()
+    const host = hostRef.current
+    if (!host || !activeId) return
+
+    const terminal = new Terminal({
+      cursorBlink: true,
+      fontFamily: "'Cascadia Mono', Consolas, 'Courier New', monospace",
+      fontSize: 13,
+      lineHeight: 1.2,
+      scrollback: 5000,
+      theme: {
+        background: '#070f21',
+        foreground: '#d6e2f5',
+        cursor: '#7fd1a8',
+        cursorAccent: '#070f21',
+        selectionBackground: 'rgba(125, 209, 168, 0.28)',
+        black: '#0f1729',
+        red: '#ff6b6b',
+        green: '#7fd1a8',
+        yellow: '#f0c674',
+        blue: '#7aa2f7',
+        magenta: '#bb9af7',
+        cyan: '#7dcfff',
+        white: '#d6e2f5',
+        brightBlack: '#5f6f8c'
+      }
     })
-  }, [activeId, scrollToBottom])
+    const fit = new FitAddon()
+    terminal.loadAddon(fit)
+    terminal.open(host)
+    termRef.current = terminal
+
+    const resize = (): void => {
+      try {
+        fit.fit()
+      } catch {
+        // host not laid out yet
+      }
+      void api.terminal.resize(activeId, terminal.cols, terminal.rows).catch(() => {})
+    }
+
+    requestAnimationFrame(() => {
+      resize()
+      void api.terminal
+        .buffer(activeId)
+        .then((buffer) => {
+          if (buffer) terminal.write(buffer)
+        })
+        .catch(() => {})
+      terminal.focus()
+    })
+
+    terminal.onData((data) => {
+      void api.terminal.write(activeId, data).catch(() => {})
+    })
+    terminal.onResize(({ cols, rows }) => {
+      void api.terminal.resize(activeId, cols, rows).catch(() => {})
+    })
+
+    window.addEventListener('resize', resize)
+    const observer = new ResizeObserver(resize)
+    observer.observe(host)
+
+    // The host can still be 0x0 on the first frame after mounting (page switch),
+    // which makes FitAddon fall back to the default 80 columns. Re-fit shortly
+    // after mount and once the monospace font is ready.
+    const retries = [setTimeout(resize, 60), setTimeout(resize, 300)]
+    void document.fonts?.ready.then(() => resize()).catch(() => {})
+
+    return () => {
+      window.removeEventListener('resize', resize)
+      observer.disconnect()
+      for (const timer of retries) clearTimeout(timer)
+      terminal.dispose()
+      termRef.current = null
+    }
+  }, [activeId])
 
   async function createTab(): Promise<void> {
     try {
-      const created = await api.terminal.create()
-      setSessions((current) => [...current, created])
-      setActiveId(created.id)
-      setBuffers((current) => ({ ...current, [created.id]: '' }))
-      setRunning((current) => ({ ...current, [created.id]: false }))
-      const buffer = await api.terminal.buffer(created.id)
-      setBuffers((current) => ({ ...current, [created.id]: buffer }))
+      await api.terminal.create()
+      applyList(await api.terminal.list())
     } catch (error) {
       toast('error', errorText(error))
     }
@@ -132,75 +164,13 @@ export function TerminalPage(): ReactElement {
     try {
       await api.terminal.close(session.id)
       let list = await api.terminal.list()
-      // Never leave the page in a dead "no terminal" state: closing the last tab
-      // immediately opens a fresh one.
       if (list.length === 0) {
-        const created = await api.terminal.create()
-        list = [created]
-        setBuffers((current) => ({ ...current, [created.id]: '' }))
-        setRunning((current) => ({ ...current, [created.id]: false }))
-        const buffer = await api.terminal.buffer(created.id)
-        setBuffers((current) => ({ ...current, [created.id]: buffer }))
+        await api.terminal.create()
+        list = await api.terminal.list()
       }
       setSessions(list)
-      setBuffers((current) => {
-        const next = { ...current }
-        if (!list.some((item) => item.id === session.id)) delete next[session.id]
-        return next
-      })
+      setRunning(Object.fromEntries(list.map((item) => [item.id, item.running])))
       setActiveId((current) => (current === session.id ? (list[0]?.id ?? null) : current))
-    } catch (error) {
-      toast('error', errorText(error))
-    }
-  }
-
-  async function submit(): Promise<void> {
-    if (!activeId) return
-
-    // Ask the main process whether this tab is busy instead of trusting React
-    // state: a command may have been started elsewhere, and a stale `running`
-    // flag would otherwise try to start a second command and get rejected.
-    const busy =
-      (await api.terminal
-        .list()
-        .then((list) => list.find((session) => session.id === activeId)?.running)
-        .catch(() => false)) ?? running[activeId]
-
-    // A command is waiting for input (pause / Read-Host / choice): send the line
-    // to its stdin instead of starting a new command. Empty Enter still counts.
-    if (busy) {
-      const line = input
-      setInput('')
-      try {
-        await api.terminal.write(activeId, `${line}\r\n`)
-      } catch (error) {
-        toast('error', errorText(error))
-      }
-      return
-    }
-
-    const command = input.trim()
-    if (!command) return
-    setInput('')
-    setHistoryIndex(-1)
-    setHistory((current) => {
-      const list = current[activeId] ?? []
-      return { ...current, [activeId]: [...list.filter((item) => item !== command), command].slice(-100) }
-    })
-    stickToBottom.current = true
-    setRunning((current) => ({ ...current, [activeId]: true }))
-    try {
-      await api.terminal.run(activeId, command)
-    } catch (error) {
-      setRunning((current) => ({ ...current, [activeId]: false }))
-      toast('error', errorText(error))
-    }
-  }
-
-  async function stop(): Promise<void> {
-    if (!activeId) return
-    try {
-      await api.terminal.stop(activeId)
     } catch (error) {
       toast('error', errorText(error))
     }
@@ -219,44 +189,11 @@ export function TerminalPage(): ReactElement {
     }
   }
 
-  function onInputKeyDown(event: React.KeyboardEvent<HTMLInputElement>): void {
+  async function clearScreen(): Promise<void> {
     if (!activeId) return
-    const list = history[activeId] ?? []
-
-    if (event.key === 'ArrowUp') {
-      event.preventDefault()
-      if (list.length === 0) return
-      const next = historyIndex < 0 ? list.length - 1 : Math.max(0, historyIndex - 1)
-      setHistoryIndex(next)
-      setInput(list[next] ?? '')
-      return
-    }
-    if (event.key === 'ArrowDown') {
-      event.preventDefault()
-      if (list.length === 0 || historyIndex < 0) return
-      const next = historyIndex + 1
-      if (next >= list.length) {
-        setHistoryIndex(-1)
-        setInput('')
-      } else {
-        setHistoryIndex(next)
-        setInput(list[next] ?? '')
-      }
-      return
-    }
-    if (event.key.toLowerCase() === 'd' && event.ctrlKey) {
-      if (activeId) {
-        event.preventDefault()
-        // No-op in the main process when nothing is running.
-        void api.terminal.closeInput(activeId).catch(() => {})
-      }
-      return
-    }
-    if (event.key === 'l' && event.ctrlKey) {
-      event.preventDefault()
-      void api.terminal.clear(activeId)
-      return
-    }
+    termRef.current?.clear()
+    termRef.current?.write('\x1b[2J\x1b[H')
+    await api.terminal.clear(activeId).catch(() => {})
   }
 
   const isRunning = activeId ? Boolean(running[activeId]) : false
@@ -309,69 +246,15 @@ export function TerminalPage(): ReactElement {
         </button>
 
         <div className="term-actions">
-          <span className={`badge ${isRunning ? 'blue' : 'green'}`}>{isRunning ? '执行中' : '就绪'}</span>
-          <button
-            className="btn small"
-            onClick={() => activeId && void api.terminal.clear(activeId)}
-            disabled={!activeId}
-          >
+          <span className={`badge ${isRunning ? 'green' : 'red'}`}>{isRunning ? '运行中' : '已退出'}</span>
+          <button className="btn small" onClick={() => void clearScreen()} disabled={!activeId}>
             清屏
           </button>
         </div>
       </div>
 
       <div className="term-body">
-        <pre
-          className="term-output"
-          ref={outputRef}
-          onScroll={(event) => {
-            const node = event.currentTarget
-            stickToBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight < 24
-          }}
-        >
-          {activeId ? (buffers[activeId] ?? '') : '没有打开的终端'}
-        </pre>
-
-        <form
-          className="term-input-row"
-          onSubmit={(event) => {
-            event.preventDefault()
-            void submit()
-          }}
-        >
-          <span className="term-prompt" title={active?.cwd}>
-            PS {active ? shortenPath(active.cwd) : ''}&gt;
-          </span>
-          <input
-            ref={inputRef}
-            className="term-input"
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={onInputKeyDown}
-            placeholder={
-              isRunning
-                ? '输入内容回车发送给进程 · Ctrl+D 结束输入 · Ctrl+C 终止'
-                : '输入命令，Enter 执行；↑↓ 翻历史，Ctrl+L 清屏'
-            }
-            spellCheck={false}
-            autoComplete="off"
-            disabled={!activeId}
-          />
-          {isRunning ? (
-            <>
-              <button type="submit" className="btn small primary" title="把输入发送给正在运行的命令">
-                发送
-              </button>
-              <button type="button" className="btn small danger" onClick={() => void stop()} title="终止当前命令">
-                停止
-              </button>
-            </>
-          ) : (
-            <button type="submit" className="btn small primary" disabled={!input.trim()}>
-              执行
-            </button>
-          )}
-        </form>
+        <div className="term-surface" ref={hostRef} onMouseDown={() => termRef.current?.focus()} />
       </div>
 
       {closing ? (
@@ -380,17 +263,11 @@ export function TerminalPage(): ReactElement {
           tone="danger"
           confirmLabel="关闭"
           message={`关闭「${closing.title}」？`}
-          detail={running[closing.id] ? '该标签页还有命令在执行，关闭会一并终止。' : '滚动记录会一并清除。'}
+          detail="该标签页里的 PowerShell 进程会被终止。"
           onCancel={() => setClosing(null)}
           onConfirm={() => void closeTab(closing)}
         />
       ) : null}
     </div>
   )
-}
-
-/** Prompt shows only the trailing folder; the full cwd is in the tooltip. */
-function shortenPath(value: string): string {
-  const parts = value.split(/[\\/]+/).filter(Boolean)
-  return parts.length > 1 ? parts[parts.length - 1] : value
 }

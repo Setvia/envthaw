@@ -3,7 +3,7 @@ import os from 'node:os'
 import { IPC, type AppInfo } from '../../shared/ipc-types'
 import { appSettingsSchema } from '../../shared/config-schema'
 import { runPowerShell } from '../utils/powershell'
-import { ensureLayout, getLayout, readSettings, writeSettings } from '../services/storage'
+import { ensureLayout, readSettings, writeSettings } from '../services/storage'
 import { configDir, dataDir, presetsDir } from '../services/paths'
 import { audit } from '../services/env-service'
 
@@ -76,6 +76,3 @@ export function registerSettingsHandlers(): void {
     return saved
   })
 }
-
-/** Exposed for the renderer's "打开配置目录" button on the settings page. */
-export const configDirectory = (): string => getLayout().root

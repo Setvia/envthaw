@@ -162,17 +162,6 @@ textarea {
   font-size: 16px;
 }
 
-.brand-name {
-  font-weight: 650;
-  color: #fff;
-  letter-spacing: 0.3px;
-}
-
-.brand-sub {
-  font-size: 11px;
-  color: #7d8aa3;
-}
-
 .nav-item {
   display: flex;
   align-items: center;
@@ -242,13 +231,6 @@ textarea {
   color: var(--text-faint);
 }
 
-.topbar-actions {
-  margin-left: auto;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
 .content {
   flex: 1;
   overflow: auto;
@@ -314,13 +296,6 @@ textarea {
 .stat-label {
   font-size: 12px;
   color: var(--text-faint);
-}
-
-.stat-hint {
-  font-size: 12px;
-  color: var(--text-soft);
-  margin-top: 6px;
-  word-break: break-all;
 }
 
 /* ---------- buttons ---------- */
@@ -889,20 +864,6 @@ table.table {
   font-size: 12px;
 }
 
-.danger-text {
-  color: var(--red);
-}
-
-.kbd {
-  font-family: 'Cascadia Mono', 'Consolas', monospace;
-  background: #eef2f9;
-  border: 1px solid var(--border-strong);
-  border-bottom-width: 2px;
-  border-radius: 5px;
-  padding: 1px 5px;
-  font-size: 11px;
-}
-
 /* ---------- title bar extras ---------- */
 .brand-mark.tiny {
   width: 20px;
@@ -1399,51 +1360,56 @@ img.brand-mark.tiny {
   box-shadow: 0 12px 32px rgba(15, 23, 41, 0.18);
 }
 
-.term-output {
+.term-surface {
   flex: 1;
   min-height: 0;
-  margin: 0;
-  padding: 12px 14px;
-  overflow: auto;
-  color: #d6e2f5;
-  font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace;
-  font-size: 12.5px;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.term-input-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 10px;
-  flex: 0 0 auto;
-  background: #111c33;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.term-prompt {
-  color: #7fd1a8;
-  font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace;
-  font-size: 12.5px;
-  white-space: nowrap;
-  max-width: 34%;
+  padding: 8px 10px 6px;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.term-input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  outline: none;
+.term-surface .xterm {
+  height: 100%;
+  /* Leave room for the 10px scrollbar so xterm's screen (cols * cellWidth) never
+     overlaps the bar and swallows its mouse events. */
+  padding-right: 18px;
+}
+
+.term-surface .xterm-viewport {
+  background: transparent !important;
+}
+
+/* Dark, draggable scrollbar that matches the terminal panel. A `scrollbar-width`
+   value would make Chromium ignore ::-webkit-scrollbar, so it is left unset. */
+.term-surface .xterm-viewport::-webkit-scrollbar {
+  width: 10px;
+}
+
+.term-surface .xterm-viewport::-webkit-scrollbar-track {
   background: transparent;
-  color: #e8eefb;
-  font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace;
-  font-size: 12.5px;
 }
 
-.term-input::placeholder {
-  color: #5f6f8c;
+.term-surface .xterm-viewport::-webkit-scrollbar-thumb {
+  min-height: 28px;
+  background: rgba(125, 145, 178, 0.42);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.term-surface .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: rgba(125, 145, 178, 0.7);
+  background-clip: content-box;
+}
+
+.term-surface .xterm-viewport::-webkit-scrollbar-thumb:active {
+  background: rgba(125, 209, 168, 0.65);
+  background-clip: content-box;
+}
+
+.term-surface .xterm-viewport::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.term-surface .xterm-screen canvas {
+  outline: none;
 }

@@ -1,10 +1,10 @@
-// Terminal integration smoke test: drives the real app through CDP.
-// Covers: tab creation, command execution, cwd builtin, independent scrollback,
-// tab close. Usage: node scripts/smoke-terminal.mjs [cdpPort]
+// Terminal integration smoke test (PTY / xterm): drives the real app through CDP.
+// Covers: xterm rendering, native PowerShell state, Chinese output, second tab,
+// independent scrollback and tab close. Usage: node scripts/smoke-terminal.mjs [port]
 const port = Number(process.argv[2] ?? 9223)
 
 const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
-const page = targets.find((t) => t.type === 'page' && t.webSocketDebuggerUrl)
+const page = targets.find((t) => t.type === 'page' && t.webSocketDebuggerUrl && !t.url.startsWith('devtools://'))
 const socket = new WebSocket(page.webSocketDebuggerUrl)
 await new Promise((resolve, reject) => {
   socket.addEventListener('open', resolve, { once: true })
@@ -20,104 +20,112 @@ function send(method, params = {}) {
       if (message.id !== callId) return
       socket.removeEventListener('message', handler)
       if (message.error) return reject(new Error(message.error.message))
-      if (message.result?.exceptionDetails) {
-        return reject(new Error(message.result.exceptionDetails.exception?.description ?? 'threw'))
-      }
       resolve(message.result)
     }
     socket.addEventListener('message', handler)
     socket.send(JSON.stringify({ id: callId, method, params }))
   })
 }
-
-const evaluate = async (expression) => (await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }))?.result?.value
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+const evaluate = async (expression) => {
+  const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })
+  if (r?.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? 'threw')
+  return r?.result?.value
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 const checks = []
-function check(name, ok, detail) {
+function check(name, ok, detail = '') {
   checks.push({ name, ok })
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  ' + detail : ''}`)
 }
 
-async function waitForIdle(sessionId, timeoutMs = 15000) {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    const list = await evaluate('window.envthaw.terminal.list()')
-    const session = (list ?? []).find((item) => item.id === sessionId)
-    if (session && !session.running) return true
-    await sleep(200)
-  }
-  return false
+async function buffer(sessionId) {
+  return evaluate(`window.envthaw.terminal.buffer(${JSON.stringify(sessionId)})`)
 }
 
-async function waitForBuffer(sessionId, needle, timeoutMs = 12000) {
+async function waitFor(sessionId, needle, timeoutMs = 12000) {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
-    const buffer = await evaluate(`window.envthaw.terminal.buffer(${JSON.stringify(sessionId)})`)
-    if (typeof buffer === 'string' && buffer.includes(needle)) return buffer
-    await sleep(300)
+    const text = await buffer(sessionId)
+    if (typeof text === 'string' && text.includes(needle)) return text
+    await sleep(200)
   }
   return null
 }
 
-// Remount the page (navigate away and back) so its state is rebuilt from the
-// main process; a blocked in-app reload would not remount React.
+const type = (sessionId, text) =>
+  evaluate(`window.envthaw.terminal.write(${JSON.stringify(sessionId)}, ${JSON.stringify(text)})`)
+
+// Reset to a known state: navigate away, close every session, create exactly one,
+// then mount the page so the UI starts from a single tab.
 await evaluate(`[...document.querySelectorAll('nav button, aside button')].find((b) => b.textContent?.includes('总览'))?.click()`)
 await sleep(300)
+await evaluate(`(async () => {
+  const list = await window.envthaw.terminal.list()
+  for (const session of list) await window.envthaw.terminal.close(session.id)
+  await window.envthaw.terminal.create()
+  return true
+})()`)
 await evaluate(`[...document.querySelectorAll('nav button, aside button')].find((b) => b.textContent?.includes('命令行'))?.click()`)
-await sleep(900)
+await sleep(1200)
 
-const pageState = await evaluate(`(() => ({
+const dom = await evaluate(`(() => ({
   hasPage: !!document.querySelector('.term-page'),
-  tabs: document.querySelectorAll('.term-tab').length,
-  hasInput: !!document.querySelector('.term-input')
+  hasXterm: !!document.querySelector('.xterm'),
+  hasInput: !!document.querySelector('.term-input'),
+  rows: document.querySelectorAll('.xterm-rows > div').length
 }))()`)
-check('terminal page renders with a tab', pageState?.hasPage === true && pageState.tabs >= 1 && pageState.hasInput === true, JSON.stringify(pageState))
+check('xterm is rendered', dom.hasPage === true && dom.hasXterm === true && dom.rows > 0, JSON.stringify(dom))
+check('no custom input box', dom.hasInput === false, String(dom.hasInput))
 
-let sessions = await evaluate('window.envthaw.terminal.list()')
-check('main process has a session', Array.isArray(sessions) && sessions.length >= 1, `count=${sessions?.length}`)
-
+const sessions = await evaluate('window.envthaw.terminal.list()')
+check('exactly one tab after first mount', sessions.length === 1, `count=${sessions.length}`)
 const first = sessions[0]
-await evaluate(`window.envthaw.terminal.run(${JSON.stringify(first.id)}, 'echo hello-envthaw')`)
-const echoBuffer = await waitForBuffer(first.id, 'hello-envthaw')
-await waitForIdle(first.id)
-check('runs a command and streams output', Boolean(echoBuffer), echoBuffer ? 'echo ok' : 'timeout')
+check('powerShell pty is running', first.running === true, first.id)
 
-await evaluate(`window.envthaw.terminal.run(${JSON.stringify(first.id)}, 'cd data')`)
-await waitForIdle(first.id)
-await sleep(300)
-sessions = await evaluate('window.envthaw.terminal.list()')
-const moved = sessions.find((item) => item.id === first.id)
-check('cd updates the tab cwd', Boolean(moved?.cwd) && /[\\/]data$/.test(moved.cwd), moved?.cwd ?? '')
-check('cd output is echoed', Boolean(await waitForBuffer(first.id, '工作目录')), 'cd echo')
+await type(first.id, 'echo hello-pty')
+await type(first.id, '\r')
+check('command output streams to xterm', Boolean(await waitFor(first.id, 'hello-pty')), 'echo ok')
+
+// A real shell keeps state between lines (the old pipe version could not).
+await type(first.id, '$envthawState = 41')
+await type(first.id, '\r')
+await type(first.id, 'Write-Output ($envthawState + 1)')
+await type(first.id, '\r')
+check('powershell state persists', Boolean(await waitFor(first.id, '42')), 'state ok')
+
+await type(first.id, 'Set-Location data')
+await type(first.id, '\r')
+await type(first.id, 'Write-Output (Get-Location).Path')
+await type(first.id, '\r')
+check('Set-Location works in the shell', Boolean(await waitFor(first.id, '\\data')), 'cwd ok')
+
+await type(first.id, 'Write-Output "中文 pty 测试"')
+await type(first.id, '\r')
+check('unicode output renders', Boolean(await waitFor(first.id, '中文 pty 测试')), 'zh ok')
 
 await evaluate(`document.querySelector('.term-new')?.click()`)
-await sleep(700)
-sessions = await evaluate('window.envthaw.terminal.list()')
-const second = sessions.find((item) => item.id !== first.id)
-check('creates a second tab', Boolean(second?.id), second?.title ?? '')
+await sleep(1200)
+const two = await evaluate('window.envthaw.terminal.list()')
+check('second tab spawns another shell', two.length === 2 && two.every((item) => item.running), two.map((s) => s.title).join(' | '))
+const second = two.find((item) => item.id !== first.id)
 
-await evaluate(`window.envthaw.terminal.run(${JSON.stringify(second.id)}, 'node -v')`)
-const nodeOut = await waitForBuffer(second.id, 'v2')
-await waitForIdle(second.id)
-check('second tab runs node -v', Boolean(nodeOut), nodeOut?.split('\n').find((line) => line.startsWith('v')) ?? 'timeout')
+await type(second.id, 'node -v')
+await type(second.id, '\r')
+const nodeOut = await waitFor(second.id, 'v2')
+check('second tab runs node', Boolean(nodeOut), nodeOut?.split('\n').find((line) => line.trim().startsWith('v')) ?? 'timeout')
 
-const firstBuffer = await evaluate(`window.envthaw.terminal.buffer(${JSON.stringify(first.id)})`)
-const secondBuffer = await evaluate(`window.envthaw.terminal.buffer(${JSON.stringify(second.id)})`)
-check(
-  'tabs keep independent scrollback',
-  firstBuffer.includes('hello-envthaw') && !secondBuffer.includes('hello-envthaw') && secondBuffer.includes('node -v'),
-  'buffers separated'
-)
+const firstBuffer = await buffer(first.id)
+const secondBuffer = await buffer(second.id)
+check('tabs keep independent scrollback', firstBuffer.includes('hello-pty') && !secondBuffer.includes('hello-pty'), 'buffers separated')
 
-const domTabs = await evaluate('document.querySelectorAll(".term-tab").length')
-check('UI shows both tabs', domTabs >= 2, `tabs=${domTabs}`)
+const tabsDom = await evaluate(`document.querySelectorAll('.term-tab').length`)
+check('two tabs in UI', tabsDom === 2, `tabs=${tabsDom}`)
 
+// Close the second tab through the UI (confirm dialog included).
 await evaluate(`(() => {
   const tabs = [...document.querySelectorAll('.term-tab')]
-  const tab = tabs[tabs.length - 1]
-  tab?.querySelector('.term-tab-close')?.click()
-  return Boolean(tab)
+  tabs[tabs.length - 1]?.querySelector('.term-tab-close')?.click()
 })()`)
 await sleep(400)
 const confirmClicked = await evaluate(`(() => {
@@ -128,18 +136,7 @@ const confirmClicked = await evaluate(`(() => {
 await sleep(600)
 check('closing a tab asks for confirmation', confirmClicked === true, String(confirmClicked))
 const afterClose = await evaluate('window.envthaw.terminal.list()')
-check('closing a tab removes the session', !afterClose.some((item) => item.id === second.id), `count=${afterClose.length}`)
-
-// Leave exactly one tab open: closing the last one auto-creates a replacement,
-// so the loop must stop at 1 instead of chasing zero.
-for (let guard = 0; guard < 8; guard += 1) {
-  const openTabs = await evaluate("document.querySelectorAll('.term-tab').length")
-  if (openTabs <= 1) break
-  await evaluate(`document.querySelector('.term-tab .term-tab-close')?.click()`)
-  await sleep(300)
-  await evaluate(`document.querySelector('.modal-footer .btn.danger')?.click()`)
-  await sleep(400)
-}
+check('closing a tab removes the session', afterClose.length === 1 && !afterClose.some((item) => item.id === second.id), `count=${afterClose.length}`)
 
 const failed = checks.filter((item) => !item.ok).length
 console.log(`\n${checks.length - failed}/${checks.length} checks passed`)

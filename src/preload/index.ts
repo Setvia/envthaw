@@ -2,7 +2,6 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import {
   IPC,
   type EnvThawApi,
-  type TerminalCwdEvent,
   type TerminalDataEvent,
   type TerminalExitEvent,
   type UpdateProgress,
@@ -108,15 +107,13 @@ const api: EnvThawApi = {
     create: () => ipcRenderer.invoke(IPC.terminalCreate),
     close: (id) => ipcRenderer.invoke(IPC.terminalClose, id),
     rename: (id, title) => ipcRenderer.invoke(IPC.terminalRename, id, title),
-    run: (id, command) => ipcRenderer.invoke(IPC.terminalRun, id, command),
-    stop: (id) => ipcRenderer.invoke(IPC.terminalStop, id),
     write: (id, data) => ipcRenderer.invoke(IPC.terminalWrite, id, data),
-    closeInput: (id) => ipcRenderer.invoke(IPC.terminalCloseInput, id),
+    resize: (id, cols, rows) => ipcRenderer.invoke(IPC.terminalResize, id, cols, rows),
+    stop: (id) => ipcRenderer.invoke(IPC.terminalStop, id),
     clear: (id) => ipcRenderer.invoke(IPC.terminalClear, id),
     buffer: (id) => ipcRenderer.invoke(IPC.terminalBuffer, id),
     onData: (callback) => subscribe<TerminalDataEvent>(IPC.terminalData, callback),
     onExit: (callback) => subscribe<TerminalExitEvent>(IPC.terminalExit, callback),
-    onCwd: (callback) => subscribe<TerminalCwdEvent>(IPC.terminalCwd, callback),
     onCleared: (callback) => subscribe<{ id: string }>(IPC.terminalCleared, callback)
   }
 }

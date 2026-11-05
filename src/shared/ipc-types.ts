@@ -241,11 +241,6 @@ export interface TerminalExitEvent {
   timedOut: boolean
 }
 
-export interface TerminalCwdEvent {
-  id: string
-  cwd: string
-}
-
 /* ------------------------------------------------------------------ cloud */
 
 export interface CloudConflictKey {
@@ -383,17 +378,14 @@ export interface EnvThawApi {
     create(): Promise<TerminalSessionInfo>
     close(id: string): Promise<void>
     rename(id: string, title: string): Promise<void>
-    run(id: string, command: string): Promise<void>
-    stop(id: string): Promise<void>
-    /** Send text to the running command's stdin (pause / Read-Host ...). */
+    /** Raw keystrokes for the PTY. */
     write(id: string, data: string): Promise<void>
-    /** Close stdin (EOF) so readers like `more` can finish. */
-    closeInput(id: string): Promise<void>
+    resize(id: string, cols: number, rows: number): Promise<void>
+    stop(id: string): Promise<void>
     clear(id: string): Promise<void>
     buffer(id: string): Promise<string>
     onData(callback: (event: TerminalDataEvent) => void): () => void
     onExit(callback: (event: TerminalExitEvent) => void): () => void
-    onCwd(callback: (event: TerminalCwdEvent) => void): () => void
     onCleared(callback: (event: { id: string }) => void): () => void
   }
 }
@@ -462,11 +454,10 @@ export const IPC = {
   terminalRun: 'terminal:run',
   terminalStop: 'terminal:stop',
   terminalWrite: 'terminal:write',
-  terminalCloseInput: 'terminal:close-input',
+  terminalResize: 'terminal:resize',
   terminalClear: 'terminal:clear',
   terminalBuffer: 'terminal:buffer',
   terminalData: 'terminal:data',
   terminalExit: 'terminal:exit',
-  terminalCwd: 'terminal:cwd',
   terminalCleared: 'terminal:cleared'
 } as const

@@ -36,20 +36,6 @@ export function diffVars(target: Record<string, string>, current: Record<string,
 }
 
 /** Turns a diff into the inverse diff, used for rollback. */
-export function invertDiff(entries: DiffEntry[]): DiffEntry[] {
-  return entries
-    .map((entry) => {
-      if (entry.kind === 'added') {
-        return { kind: 'removed' as const, name: entry.name, before: entry.after, after: null }
-      }
-      if (entry.kind === 'removed') {
-        return { kind: 'added' as const, name: entry.name, before: null, after: entry.before }
-      }
-      return { kind: 'modified' as const, name: entry.name, before: entry.after, after: entry.before }
-    })
-    .sort((a, b) => a.name.localeCompare(b.name))
-}
-
 export function summarizeDiff(entries: DiffEntry[]): string {
   const added = entries.filter((e) => e.kind === 'added').length
   const modified = entries.filter((e) => e.kind === 'modified').length

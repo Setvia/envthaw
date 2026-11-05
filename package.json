@@ -11,13 +11,13 @@
     "build": "electron-vite build",
     "start": "node scripts/launch.js preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "capture": "node scripts/capture-docs.mjs 9223",
     "smoke": "node scripts/smoke.mjs 9223",
     "smoke:functional": "node scripts/smoke-functional.mjs 9223",
     "smoke:update": "node scripts/smoke-update.mjs 9223",
     "smoke:users": "node scripts/smoke-users.mjs 9223",
     "smoke:cloud": "node scripts/smoke-cloud.mjs 9223",
     "smoke:terminal": "node scripts/smoke-terminal.mjs 9223",
-    "smoke:terminal:stdin": "node scripts/smoke-terminal-stdin.mjs 9223",
     "package": "electron-vite build && electron-builder --win portable",
     "prepare": "node scripts/install-hooks.mjs"
   },
@@ -25,6 +25,8 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
     "electron": "^45.2.0",
     "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
@@ -45,6 +47,10 @@
       "out/**/*",
       "package.json"
     ],
+    "asarUnpack": [
+      "**/node_modules/node-pty/**"
+    ],
+    "npmRebuild": false,
     "extraResources": [
       {
         "from": "presets",
@@ -65,5 +71,8 @@
     "portable": {
       "artifactName": "EnvThaw-${version}-portable.exe"
     }
+  },
+  "dependencies": {
+    "node-pty": "^1.1.0"
   }
 }

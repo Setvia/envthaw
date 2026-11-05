@@ -9,18 +9,18 @@
 
 ## 功能
 
-| 模块 | 状态 | 说明 |
-| --- | --- | --- |
-| 多用户 | ✅ | 每个用户在 `config/<user>/` 下有独立目录，`default` 为未登录的临时状态；可创建 / 切换 / 删除 |
-| 环境变量管理 | ✅ | 读取 / 搜索 / 新增 / 修改 / 删除 `HKCU\Environment`，保留 `REG_EXPAND_SZ` 语义，写入后广播 `WM_SETTINGCHANGE` |
-| 快照与恢复 | ✅ | 保存用户级变量快照；恢复前展示 diff，只改差异项；每次变更自动生成回滚点，可一键撤销 |
-| 路径重定向 | ✅ | `WORKON_HOME` / `PIP_CACHE_DIR` / `NPM_CONFIG_PREFIX` / `NPM_CONFIG_CACHE` / `GIT_CONFIG_GLOBAL`，默认收进项目内 `data/` |
-| 脚本库 | ✅ | 脚本以**文件**形式存放在 `<user>/scripts/`；支持拖拽添加（复制入库）、在资源管理器中打开、dry-run、执行与超时控制 |
-| 配置包 | ✅ | 导出 / 导入 JSON（设置、重定向、快照、脚本） |
-| 检查更新 | ✅ | 读取 HTTPS 更新清单 → 对比版本 → 下载安装包（进度条 + SHA-256 校验）→ 打开下载目录 |
-| 审计日志 | ✅ | 所有写操作落 `audit.jsonl`，UI 可查，按用户隔离 |
-| 无边框窗口 | ✅ | 自绘标题栏（拖动 / 双击最大化 / 最小化 / 最大化 / 关闭），布局参考 DSH 桌面端 |
-| 内嵌命令行 | ✅ | 多标签终端：每标签独立工作目录与滚动缓冲，PowerShell 执行、流式输出、命令历史、Ctrl+C 停止 |
+| 模块 | 说明 |
+| --- | --- |
+| 多用户 | 每个用户在 `config/<user>/` 下有独立目录，`default` 为未登录的临时状态；可创建 / 切换 / 删除 |
+| 环境变量管理 | 读取 / 搜索 / 新增 / 修改 / 删除 `HKCU\Environment`，保留 `REG_EXPAND_SZ` 语义，写入后广播 `WM_SETTINGCHANGE` |
+| 快照与恢复 | 保存用户级变量快照；恢复前展示 diff，只改差异项；每次变更自动生成回滚点，可一键撤销 |
+| 路径重定向 | `WORKON_HOME` / `PIP_CACHE_DIR` / `NPM_CONFIG_PREFIX` / `NPM_CONFIG_CACHE` / `GIT_CONFIG_GLOBAL`，默认收进项目内 `data/` |
+| 脚本库 | 脚本以**文件**形式存放在 `<user>/scripts/`；支持拖拽添加（复制入库）、在资源管理器中打开、dry-run、执行与超时控制 |
+| 配置包 | 导出 / 导入 JSON（设置、重定向、快照、脚本） |
+| 检查更新 | 读取 HTTPS 更新清单 → 对比版本 → 下载安装包（进度条 + SHA-256 校验）→ 打开下载目录 |
+| 审计日志 | 所有写操作落 `audit.jsonl`，UI 可查，按用户隔离 |
+| 无边框窗口 | 自绘标题栏（拖动 / 双击最大化 / 最小化 / 最大化 / 关闭），布局参考 DSH 桌面端 |
+| 内嵌命令行 | 多标签终端，与 VS Code 同方案（xterm.js + ConPTY）：原生 PowerShell 会话、颜色、Tab 补全、Ctrl+C 中断 |
 
 ### 界面
 
@@ -28,20 +28,25 @@
 | --- | --- |
 | ![环境变量](docs/screenshots/env-vars.png) | ![脚本库](docs/screenshots/scripts-dryrun.png) |
 
-| 拖拽添加脚本 | 用户切换 |
+| 内嵌命令行 | 快照与恢复 |
 | --- | --- |
-| ![拖拽](docs/screenshots/scripts-drop.png) | ![用户](docs/screenshots/users.png) |
+| ![命令行](docs/screenshots/terminal.png) | ![快照](docs/screenshots/snapshots.png) |
 
 | 设置 / 检查更新 | 路径重定向 |
 | --- | --- |
 | ![设置](docs/screenshots/settings.png) | ![路径重定向](docs/screenshots/redirect.png) |
 
+| 多用户切换 |
+| --- |
+| ![用户](docs/screenshots/users.png) |
+
 ## 技术栈
 
 - **electron-vite 6 + Vite 8 + TypeScript 7 + React 19**
-- 主进程只使用 Node 内置模块（`fs` / `child_process` / `fetch`），注册表读写走 PowerShell（无需 native 依赖）
+- 主进程：Node 内置模块 + `node-pty`（ConPTY，自带 win32-x64 N-API 预编译二进制）；注册表读写走 PowerShell
+- 渲染进程：React 19 + `@xterm/xterm`（终端）+ 手写样式，无 UI 框架
 - 参数校验：`zod`（`src/shared/config-schema.ts`）
-- 打包：`electron-builder`（portable target，`presets/` 通过 `extraResources` 一起打包）
+- 打包：`electron-builder`（portable target，`presets/` 通过 `extraResources` 一起打包，`node-pty` 通过 `asarUnpack` 解包）
 
 ## 目录结构
 
@@ -72,18 +77,20 @@ resources/
 src/
 ├── main/
 │   ├── index.ts             # 入口、无边框窗口、生命周期
-│   ├── ipc/                 # env / script / path / transfer / app / audit / users / window / update
+│   ├── ipc/                 # app / env / script / path / users / transfer / audit / window / update / cloud / terminal
 │   ├── services/
 │   │   ├── paths.ts            # 项目根 / config / 用户目录 / data / presets
 │   │   ├── env-service.ts      # 变量读写 + 快照 + 回滚
-│   │   ├── restore-engine.ts   # 纯 diff / 逆向 diff
+│   │   ├── restore-engine.ts   # 纯 diff 计算
 │   │   ├── script-runner.ts    # dry-run 解析 + 执行 + 文件导入
 │   │   ├── path-redirect.ts    # 重定向配置与落地
 │   │   ├── update-service.ts   # 检查更新 / 下载 / 校验
-│   │   └── storage.ts          # 用户目录、播种、脚本文件、审计
-│   └── utils/               # powershell / registry
+│   │   ├── terminal-service.ts # ConPTY 会话（xterm 后端）
+│   │   ├── storage.ts          # 用户目录、播种、脚本文件、审计
+│   │   └── cloud/              # 云同步客户端（登录 / 推送 / 拉取 / 合并）
+│   └── utils/               # powershell / registry / encoding
 ├── preload/                 # contextBridge：window.envthaw
-├── renderer/                # React 界面（自绘 TitleBar、UserSwitcher、拖拽区）
+├── renderer/                # React 界面（自绘 TitleBar、UserSwitcher、xterm 终端）
 └── shared/                  # IPC 类型与 zod schema（唯一真相源）
 ```
 
@@ -103,6 +110,16 @@ npm run typecheck
 
 `F12` / `Ctrl+Shift+I` 打开的是**独立窗口**的 DevTools（`mode: 'detach'`），不会挤占应用窗口布局，仍在同一个进程内。
 
+### 重新生成 README 截图
+
+应用以 `ENVTHAW_DEBUG_PORT=9223` 启动后：
+
+```bash
+node scripts/capture-docs.mjs 9223
+```
+
+会逐页截图到 `docs/screenshots/`，自动模糊环境变量值、把项目路径替换成 `E:\EnvThaw`，不会把本机路径带进仓库。
+
 ### 图标
 
 `assets/icon.png` 是原始素材（白色画布）。执行：
@@ -118,6 +135,9 @@ python scripts/make_icon.py   # 需要 Pillow
 1. **`ELECTRON_RUN_AS_NODE` / `NODE_OPTIONS`** —— 由 IDE 调试终端或 npm 钩子注入，会让 `electron.exe` 变成纯 Node（`require('electron')` 返回字符串），或者预加载调试 bootloader 吞掉主进程日志。启动器对子进程删除这两个变量。
 2. **Chromium 沙箱在特定目录下无法初始化** —— 浏览器进程会在 `app.whenReady()` 之前崩溃（`0xC0000005` / `0x80000003`）。首次启动会把 electron 运行时镜像到 `%LOCALAPPDATA%\EnvThaw\runtime\<version>`，再用目录联接接回 `node_modules/electron/dist`。想跳过：`ENVTHAW_LOCAL_RUNTIME=1 npm run dev`。
 3. **兜底**：沙箱仍起不来时会用 `--no-sandbox` 重试一次；此时进程是 Low 完整性级别，只能读环境变量。
+
+> 这些规避**只作用于开发启动**（`scripts/launch.js`），不会进入 `out/` 或安装包。打包产物是标准 Electron 应用，
+> 解压到普通目录即可运行，不依赖启动器、镜像目录或任何沙箱参数。
 
 ## 配置文件与多用户
 
@@ -177,9 +197,11 @@ npm run smoke            # 只读：桥、窗口控制、用户目录、模板�
 npm run smoke:functional # 写路径：注册表写入（中文值）、快照 diff/恢复/回滚、dry-run、执行
 npm run smoke:update     # 更新流程：本地 http 清单 → 检查 → 下载 → SHA-256 → 坏摘要拒绝
 npm run smoke:users      # 多用户：创建/切换/删除、脚本导入拷贝、非脚本告警、不可执行报错
+npm run smoke:terminal   # 终端：xterm 渲染、PowerShell 会话状态、中文、多标签、关闭确认
+npm run smoke:cloud      # 云同步：登录 → 推送 → 另一台设备拉取 → 退出
 ```
 
-实测结果：只读 21/21、功能 13/13、更新 9/9、多用户 16/16 通过（Windows 10 22H2，Electron 45.2.0）。
+实测结果：只读 21/21、功能 13/13、更新 9/9、多用户 16/16、终端 14/14（Windows 10 22H2，Electron 45.2.0）。
 
 ## 云后端方案
 
@@ -242,11 +264,11 @@ ENVTHAW_ALLOW_SENSITIVE=1 git commit ...   # 或 git push
 
 ## 已知限制
 
-- 云同步、账号、Agent 辅助均未实现
-- 更新站点尚未上线，`updateFeedUrl` 默认为空，界面显示「未配置更新源」
+- 云同步需要自建后端（见下文「本地部署版」），公网服务与更新站点尚未上线，`updateFeedUrl` 默认为空
+- Agent 辅助（M8）未实现
 - 用户切换会整体重载界面（简单可靠，但不是无刷新切换）
 - 系统级环境变量仅做只读展示，修改需要管理员权限，按文档要求不做
-- `--no-sandbox` 兜底模式下无法写环境变量（Windows 完整性级别限制）
+- 开发启动器在特定目录下需要镜像运行时 / `--no-sandbox` 兜底；打包产物不受此限制
 
 ## 打包
 
@@ -255,6 +277,10 @@ npm run package   # electron-vite build + electron-builder --win portable
 ```
 
 产物在 `release/EnvThaw-<version>-portable.exe`，图标取自 `resources/icon.ico`。
+
+终端依赖 `node-pty` 的原生模块（自带 win32-x64 预编译二进制，N-API 无需按 Electron ABI 重编），
+打包配置里已设置 `npmRebuild: false` 并通过 `asarUnpack` 把 `node-pty` 解包到 `app.asar.unpacked`，
+否则 ConPTY 无法加载。
 
 ## License
 

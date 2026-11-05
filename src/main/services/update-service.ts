@@ -6,7 +6,7 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { IPC, type UpdateProgress, type UpdateRelease, type UpdateState } from '../../shared/ipc-types'
 import { audit } from './env-service'
-import { ensureLayout, getLayout, readSettings } from './storage'
+import { ensureLayout, readSettings } from './storage'
 
 const MAX_DOWNLOAD_BYTES = 500 * 1024 * 1024
 const CHECK_TIMEOUT_MS = 15_000
@@ -241,4 +241,3 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`
 }
 
-export const downloadTargetDir = (): string => getLayout().files.updates
