@@ -1,7 +1,7 @@
 {
   "name": "envthaw",
   "productName": "EnvThaw",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "EnvThaw - 面向学生开发者的可持久化环境编排工具",
   "author": "Setvia",
   "license": "BUSL-1.1",
