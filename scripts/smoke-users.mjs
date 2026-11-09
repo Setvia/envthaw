@@ -10,7 +10,7 @@ async function target() {
   for (let attempt = 0; attempt < 40; attempt += 1) {
     try {
       const list = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
-      const page = list.find((item) => item.type === 'page' && item.webSocketDebuggerUrl)
+      const page = list.find((item) => item.type === 'page' && item.webSocketDebuggerUrl && !item.url.startsWith('devtools://'))
       if (page) return page
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 500))

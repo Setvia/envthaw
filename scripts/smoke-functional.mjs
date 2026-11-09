@@ -11,7 +11,7 @@ async function waitForTarget() {
     try {
       const response = await fetch(`http://127.0.0.1:${port}/json`)
       const targets = await response.json()
-      const page = targets.find((target) => target.type === 'page' && target.webSocketDebuggerUrl)
+      const page = targets.find((target) => target.type === 'page' && target.webSocketDebuggerUrl && !target.url.startsWith('devtools://'))
       if (page) return page
     } catch {
       // not up yet
